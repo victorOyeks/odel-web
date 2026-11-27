@@ -11,6 +11,7 @@ import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
+import { LiveSearchForm } from "@/components/ui/live-search";
 import { SearchBox, SelectField } from "@/components/ui/fields";
 import { Icon } from "@/components/ui/icon";
 import { Panel } from "@/components/ui/panel";
@@ -59,9 +60,9 @@ export function CentresView({ centres, search, openId }: { centres: Centre[]; se
         </EmptyCard>
       ) : (
         <>
-          <form method="get" action="/staff/centres" role="search" aria-label="Search centres">
+          <LiveSearchForm action="/staff/centres" label="Search centres">
             <SearchBox defaultValue={search} placeholder="Search centres" label="Search centres" />
-          </form>
+          </LiveSearchForm>
           {rows.length ? (
             <DataTable
               caption="Study centres"

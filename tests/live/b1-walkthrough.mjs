@@ -716,6 +716,14 @@ await group("H", "People & roles (W-15, W-15b, W-15c); staff email is held by th
       await a.goto(`${UNI}/staff/people?search=${enc(pp.email)}`); await a.getByRole("button", { name: pp.name }).first().waitFor();
     });
   }
+  await step(a, "People & roles: live search and the role filter apply as you go", async () => {
+    await a.goto(`${UNI}/staff/people`); await a.waitForLoadState("networkidle");
+    if (await a.getByRole("button", { name: /^(Find|Show)$/ }).count()) throw new Error("a Find/Show button is still there");
+    await a.getByLabel("Search staff").fill("Bello"); await a.waitForURL(/search=Bello/); await a.getByRole("button", { name: BELLO.name }).first().waitFor();
+    await a.getByLabel("Search staff").fill(""); await a.locator('select[name="role"]').selectOption("CENTRE_COORDINATOR"); await a.waitForURL(/role=CENTRE_COORDINATOR/);
+    await a.getByRole("button", { name: ADE.name }).first().waitFor();
+    if (await a.getByRole("button", { name: BELLO.name }).count()) throw new Error("the role filter did not apply");
+  });
   const bulk = a.getByRole("dialog", { name: "Invite staff from a CSV file" });
   let kemiNew = false;
   await step(a, "Bulk invite CSV: unknown role, an existing email and a Gmail address are reported, nothing sent yet", async () => {
@@ -1111,14 +1119,18 @@ await group("R", "The office side: students list and record (W-22, W-22b)", asyn
   async function openP() { await a.goto(`${UNI}/staff/students?q=${enc(P.matric)}`); await a.getByRole("button", { name: P.name }).first().click(); await rec.getByText("Activation message").waitFor(); await dialogOk(a, P.name); }
   await asAdmin();
   await step(a, "Search by name, matric number and email", async () => {
-    await a.goto(`${UNI}/staff/students`); await a.getByLabel("Search students").fill(P.surname); await a.getByRole("button", { name: "Find" }).click(); await a.getByRole("button", { name: P.name }).first().waitFor();
-    await a.getByLabel("Search students").fill(P.matric); await a.getByRole("button", { name: "Find" }).click(); await a.getByText("1 student match.").waitFor();
-    await a.getByLabel("Search students").fill(P.email); await a.getByRole("button", { name: "Find" }).click(); await a.getByText("1 student match.").waitFor();
+    // Live search (no Find button): the list follows the box after a short pause, and the query is in the address.
+    await a.goto(`${UNI}/staff/students`); await a.waitForLoadState("networkidle");
+    if (await a.getByRole("button", { name: /^(Find|Show)$/ }).count()) throw new Error("a Find/Show button is still there");
+    await a.getByLabel("Search students").fill(P.surname); await a.waitForURL(new RegExp(`q=${P.surname}`)); await a.getByRole("button", { name: P.name }).first().waitFor();
+    await a.getByLabel("Search students").fill(P.matric); await a.waitForURL(/q=WU%2FODL/); await a.getByText("1 student match.").waitFor();
+    await a.getByLabel("Search students").fill(P.email); await a.waitForURL(/q=tobi/); await a.getByText("1 student match.").waitFor();
+    await a.getByLabel("Search students").fill("x"); await a.waitForURL((u) => !u.search.includes("q=")); // one letter: the full list
   });
   await step(a, "Filters: Akure, 200L, Active include this run's student and Adeola", async () => {
     await a.goto(`${UNI}/staff/students`);
     await a.locator('select[name="centre"]').selectOption("AKR"); await a.locator('select[name="level"]').selectOption("200"); await a.locator('select[name="status"]').selectOption("ACTIVE");
-    await a.getByRole("button", { name: "Find" }).click(); await a.waitForURL(/status=ACTIVE/);
+    await a.waitForURL(/centre=AKR.*level=200.*status=ACTIVE|status=ACTIVE/); // filters apply at once
     const r = (await W("/students?centre=AKR&level=200&status=ACTIVE&size=200")).body;
     for (const m of [P.matric, ADEOLA.matric]) if (!r.items.some((x) => x.matricNumber === m)) throw new Error(`${m} is not in the filtered list`);
     if (r.items.some((x) => x.status !== "ACTIVE" || x.level !== 200 || x.centre.code !== "AKR")) throw new Error("the filter let other students through");

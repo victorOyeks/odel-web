@@ -11,6 +11,7 @@ import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
+import { LiveSearchForm } from "@/components/ui/live-search";
 import { Checkbox, FilterSelect, SearchBox, SelectField, TextArea } from "@/components/ui/fields";
 import { Icon } from "@/components/ui/icon";
 import { Pager } from "@/components/ui/nav-bits";
@@ -48,7 +49,7 @@ export function StudentsView({ data, f, filters, openId }: { data: Paged<Student
         }
       />
       {notice ? <Banner tone="success" title={notice} /> : null}
-      <form method="get" action="/staff/students" role="search" aria-label="Find students" className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
+      <LiveSearchForm action="/staff/students" label="Find students" className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
         <SearchBox name="q" defaultValue={f.q} placeholder="Name, matric number or email" label="Search students" />
         <FilterSelect label="Programme" name="programme" defaultValue={f.programme}>
           <option value="">All</option>
@@ -82,10 +83,7 @@ export function StudentsView({ data, f, filters, openId }: { data: Paged<Student
             </option>
           ))}
         </FilterSelect>
-        <Button type="submit" variant="secondary" leadingIcon="search">
-          Find
-        </Button>
-      </form>
+      </LiveSearchForm>
       {!data.items.length ? (
         <EmptyCard
           title={filtered ? "No students match" : "No students yet"}

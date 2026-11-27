@@ -26,7 +26,7 @@ test("W-18 → W-19 → import: a bad centre and a duplicate are reported, nothi
   await expect(page.getByRole("heading", { name: "Students imported" })).toBeVisible();
   await page.getByRole("link", { name: "See students" }).click();
   await page.getByLabel("Search students").fill("Kunle");
-  await page.getByRole("button", { name: "Find" }).click();
+  // Live search: no Find button; the list updates as you type.
   await expect(page.getByRole("button", { name: "Kunle Adeyemi" }).first()).toBeVisible();
 });
 

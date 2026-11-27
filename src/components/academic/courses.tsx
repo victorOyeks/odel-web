@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
+import { LiveSearchForm } from "@/components/ui/live-search";
 import { Checkbox, FilterSelect, SearchBox, SelectField } from "@/components/ui/fields";
 import { Pager } from "@/components/ui/nav-bits";
 import { Panel } from "@/components/ui/panel";
@@ -52,7 +53,7 @@ export function CoursesView({ data, filters, programmes, lecturers }: { data: Co
         </EmptyCard>
       ) : (
         <>
-          <form method="get" action="/staff/courses" className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center" role="search" aria-label="Filter courses">
+          <LiveSearchForm action="/staff/courses" label="Filter courses" className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
             <SearchBox name="search" defaultValue={filters.search} placeholder="Search course code or title" label="Search courses" />
             <FilterSelect label="Programme" name="programmeId" defaultValue={filters.programmeId}>
               <option value="">All</option>
@@ -84,16 +85,13 @@ export function CoursesView({ data, filters, programmes, lecturers }: { data: Co
                 </option>
               ))}
             </FilterSelect>
-            <Button type="submit" variant="secondary" leadingIcon="filter_list">
-              Show
-            </Button>
             <div className="md:ml-auto">
               <ExportRows
                 fileName="course-catalogue.csv"
                 rows={[["Code", "Title", "Units", "Level", "Semester", "Programmes", "Lecturer"], ...data.items.map((c) => [c.code, c.title, c.units, `${c.level}L`, c.semesterLabel, c.offeredTo.map((o) => o.programmeName).join("; "), c.lecturer?.fullName ?? ""])]}
               />
             </div>
-          </form>
+          </LiveSearchForm>
           {!data.items.length ? (
             <EmptyCard
               title={filtered ? "No courses match" : "No courses yet"}

@@ -1,3 +1,4 @@
+import { LiveSearchForm } from "@/components/ui/live-search";
 import type { Metadata } from "next";
 import { apiGet } from "@/lib/api/server";
 import { expectSession } from "@/lib/guard";
@@ -5,7 +6,6 @@ import type { Paged, UniversityAuditItem } from "@/lib/types-b1";
 import { formatWhen } from "@/lib/format";
 import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { FilterSelect } from "@/components/ui/fields";
 import { Pager, TextLink } from "@/components/ui/nav-bits";
@@ -35,7 +35,7 @@ export default async function AuditLogPage({ searchParams }: PageProps<"/staff/r
         subtitle="Every sign-in, role change and setup change at the university, newest first. Kept for 7 years."
         actions={res.ok ? <ExportRows fileName="audit-log.csv" rows={[["When", "Who", "Role", "Type", "What", "Action", "IP"], ...res.data.items.map((a) => [a.at, a.actor?.fullName ?? "System", a.actor?.roleLabel ?? "", TYPES[a.type] ?? a.type, a.summary, a.action, a.ip ?? ""])]} /> : undefined}
       />
-      <form method="get" action="/staff/reports/audit" aria-label="Filter the audit log" className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-end">
+      <LiveSearchForm action="/staff/reports/audit" label="Filter the audit log" className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-end">
         <FilterSelect label="Show" name="type" defaultValue={f.type}>
           <option value="">Everything</option>
           {Object.entries(TYPES).map(([k, v]) => (
@@ -52,10 +52,7 @@ export default async function AuditLogPage({ searchParams }: PageProps<"/staff/r
           To
           <input type="date" name="to" defaultValue={f.to} className={dateInput} />
         </label>
-        <Button type="submit" variant="secondary" leadingIcon="filter_list">
-          Show
-        </Button>
-      </form>
+      </LiveSearchForm>
       {!res.ok ? (
         <LoadFailed result={res} what="the audit log" />
       ) : !res.data.items.length ? (

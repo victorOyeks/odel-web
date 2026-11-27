@@ -12,6 +12,7 @@ import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
+import { LiveSearchForm } from "@/components/ui/live-search";
 import { FilterSelect, SearchBox, TextArea } from "@/components/ui/fields";
 import { Pager } from "@/components/ui/nav-bits";
 import { Panel } from "@/components/ui/panel";
@@ -58,7 +59,7 @@ export function PeopleView({ data, filters, domain, myEmail, canEdit, openId }: 
         }
       />
       {notice ? <Banner tone="success" title={notice} /> : null}
-      <form method="get" action="/staff/people" role="search" aria-label="Filter staff" className="flex flex-col gap-2 md:flex-row md:items-center">
+      <LiveSearchForm action="/staff/people" label="Filter staff" className="flex flex-col gap-2 md:flex-row md:items-center">
         <SearchBox name="search" defaultValue={filters.search} placeholder="Search name or email" label="Search staff" />
         <FilterSelect label="Role" name="role" defaultValue={filters.role}>
           <option value="">Any</option>
@@ -74,10 +75,7 @@ export function PeopleView({ data, filters, domain, myEmail, canEdit, openId }: 
           <option value="INVITED">Invited</option>
           <option value="SUSPENDED">Suspended</option>
         </FilterSelect>
-        <Button type="submit" variant="secondary" leadingIcon="filter_list">
-          Show
-        </Button>
-      </form>
+      </LiveSearchForm>
       {!data.items.length ? (
         <EmptyCard
           title={filtered ? "Nobody matches" : "Nobody invited yet"}

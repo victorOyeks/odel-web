@@ -1,6 +1,7 @@
 import { useId, type ComponentProps, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Icon } from "./icon";
+import { useSearchPending } from "./live-search";
 
 const box = (error?: ReactNode) =>
   cn(
@@ -90,6 +91,7 @@ export function Checkbox({ label, hint, className, ...rest }: { label: ReactNode
 
 /** A small search box for list pages (submits with the page's GET form). */
 export function SearchBox({ name = "q", defaultValue, placeholder, label }: { name?: string; defaultValue?: string; placeholder: string; label: string }) {
+  const pending = useSearchPending();
   return (
     <label className="relative flex w-full items-center sm:max-w-xs">
       <span className="sr-only">{label}</span>
@@ -99,8 +101,15 @@ export function SearchBox({ name = "q", defaultValue, placeholder, label }: { na
         name={name}
         defaultValue={defaultValue}
         placeholder={placeholder}
-        className="h-12 w-full rounded-full border border-transparent bg-subtle pr-4 pl-10 text-body-lg text-ink outline-none placeholder:text-ink-3 focus:border-focus md:h-10 md:text-body"
+        autoComplete="off"
+        className="h-12 w-full rounded-full border border-transparent bg-subtle pr-10 pl-10 text-body-lg text-ink outline-none placeholder:text-ink-3 focus:border-focus md:h-10 md:text-body"
       />
+      {pending ? (
+        <span role="status" className="pointer-events-none absolute right-3 flex text-brand">
+          <Icon name="progress_activity" size={20} className="spin" />
+          <span className="sr-only">Searching</span>
+        </span>
+      ) : null}
     </label>
   );
 }
