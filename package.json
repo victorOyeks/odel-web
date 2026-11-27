@@ -1,19 +1,27 @@
 {
-  "name": "odel-tmp",
+  "name": "odel-web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:mock": "ODEL_MOCK_API=1 next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "start:mock": "ODEL_MOCK_API=1 next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "playwright test",
+    "icons": "bun scripts/fetch-icons.ts"
   },
   "dependencies": {
     "next": "16.4.6",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1",
+    "uqr": "^0.1.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "^20",
     "@types/react": "^19",
