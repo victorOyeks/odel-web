@@ -31,6 +31,7 @@ export const ICONS = [
   "edit",
   "error",
   "event",
+  "expand_less",
   "expand_more",
   "fact_check",
   "filter_list",
