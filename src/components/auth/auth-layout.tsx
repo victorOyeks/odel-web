@@ -66,7 +66,7 @@ export function AuthLayout({ ctx, surface, children }: { ctx: PublicContext; sur
             src={t.logoUrl}
             alt=""
             aria-hidden="true"
-            className="pointer-events-none absolute -right-28 top-1/2 w-[440px] max-w-none -translate-y-1/2 opacity-[0.07] grayscale"
+            className="pointer-events-none absolute -right-48 top-[42%] w-[440px] max-w-none -translate-y-1/2 opacity-[0.06] grayscale"
           />
         ) : null}
         <div className="relative flex flex-1 flex-col px-14 pt-14 pb-10">
