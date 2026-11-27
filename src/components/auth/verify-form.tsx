@@ -18,7 +18,8 @@ export function VerifyForm({ issuer, surface, next }: { issuer: string; surface:
   const [mode, setMode] = useState<"code" | "backup">("code");
   const [code, setCode] = useState("");
   const [backup, setBackup] = useState("");
-  const [trust, setTrust] = useState(true);
+  // Off by default: staff often sign in on shared study-centre computers; trusting one is a deliberate choice.
+  const [trust, setTrust] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

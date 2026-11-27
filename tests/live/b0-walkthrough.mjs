@@ -69,6 +69,15 @@ async function signInStub(page, nameOrEmail, { email } = {}) {
   if (email) { await page.fill("#email", email); await page.getByRole("button", { name: "Continue", exact: true }).click(); }
   else await page.getByRole("button", { name: new RegExp(nameOrEmail) }).click();
 }
+async function signOut(page) {
+  await page.waitForLoadState("networkidle");
+  const all = page.getByRole("button", { name: "Sign out" });
+  const info = await all.evaluateAll((els) => els.map((e) => `${e.textContent.trim()}|visible=${!!(e.offsetWidth || e.offsetHeight)}`));
+  if (process.env.DEBUG) console.log("      sign-out buttons:", info.join(" ; "));
+  await all.filter({ visible: true }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
+  await page.waitForURL(/sign-in/);
+}
 async function typeCode(page, value) {
   await page.locator('input[inputmode="numeric"]').first().click();
   await page.keyboard.type(value);
@@ -137,7 +146,7 @@ await group("B · Provider adds Lakeshore University (SA-02 to SA-05b)", async (
   });
   await step(c, "Created - next steps show it is live at its platform address (SA-05b)", async () => {
     await c.getByRole("button", { name: "Create the university" }).click(); await c.getByText(/is set up/).waitFor();
-    await c.locator("li", { hasText: `Live at ${UNI}` }).first().waitFor();
+    await c.getByText(new RegExp(`Live at ${UNI.replace(/[.]/g, "\\.")}`)).first().waitFor();
   });
   await step(c, "University page - web addresses and the invitation (SA-01b)", async () => {
     await c.getByText("Open the university page").click(); await c.getByText("Web addresses").waitFor();
@@ -181,7 +190,7 @@ await group("C · Lakeshore's first admin gets in (W-01 to W-05, W-10)", async (
 });
 
 await group("D · Signing out and back in (S-04, S-02, W-03)", async () => {
-  await step(a, "Sign out asks to confirm (S-04)", async () => { await a.getByRole("button", { name: "Sign out" }).first().click(); await a.getByText("Sign out?").waitFor(); });
+  await step(a, "Sign out asks to confirm (S-04)", async () => { await a.waitForLoadState("networkidle"); await a.getByRole("button", { name: "Sign out" }).first().click(); await a.getByText("Sign out?").waitFor(); });
   await step(a, "Signed out - back to sign-in (S-02)", async () => { await a.getByRole("dialog").getByRole("button", { name: "Sign out" }).click(); await a.waitForURL(/sign-in/); });
   await step(a, "Edge - sign in with a backup code instead of the app", async () => {
     await signInStub(a, "Bola Ige"); await a.getByText("Enter your 6-digit code").waitFor(); await a.waitForLoadState("networkidle");
@@ -189,7 +198,7 @@ await group("D · Signing out and back in (S-04, S-02, W-03)", async () => {
     await a.getByRole("button", { name: "Verify" }).click(); await a.getByText("Session and semesters").first().waitFor();
   });
   await step(a, "Negative - the same backup code cannot be used twice", async () => {
-    await a.getByRole("button", { name: "Sign out" }).first().click(); await a.getByRole("dialog").getByRole("button", { name: "Sign out" }).click(); await a.waitForURL(/sign-in/);
+    await signOut(a);
     await signInStub(a, "Bola Ige"); await a.getByText("Enter your 6-digit code").waitFor(); await a.waitForLoadState("networkidle");
     await a.getByText("Use a backup code instead").click(); await a.getByLabel("Backup code").fill(backup[0]);
     await a.getByRole("button", { name: "Verify" }).click(); await a.getByText(/not right|tries|attempts/i).first().waitFor();
@@ -204,7 +213,7 @@ await group("D · Signing out and back in (S-04, S-02, W-03)", async () => {
     await a.getByRole("button", { name: "Verify" }).click(); await a.getByText("Session and semesters").first().waitFor();
   });
   await step(a, "Edge - a trusted computer skips the code next time", async () => {
-    await a.getByRole("button", { name: "Sign out" }).first().click(); await a.getByRole("dialog").getByRole("button", { name: "Sign out" }).click(); await a.waitForURL(/sign-in/);
+    await signOut(a);
     await signInStub(a, "Bola Ige"); await a.getByText("Session and semesters").first().waitFor();
   });
 });
