@@ -1,8 +1,12 @@
 export type Surface = "console" | "university";
 
-/** `console.<base domain>` (and `console.localhost:3000` in dev) is the provider console; every other host is a university. */
+/** Extra console host for an environment whose console is not `console.<base>` (e.g. odel-console-dev.oyeksglobal.com). Set at build time. */
+const CONSOLE_HOST = (process.env.NEXT_PUBLIC_ODEL_CONSOLE_HOST ?? "").toLowerCase();
+
+/** `console.<base domain>` (and `console.localhost:3000` in dev), or NEXT_PUBLIC_ODEL_CONSOLE_HOST, is the provider console; every other host is a university. */
 export function surfaceForHost(host: string | null | undefined): Surface {
   const hostname = (host ?? "").split(":")[0].toLowerCase();
+  if (CONSOLE_HOST && hostname === CONSOLE_HOST) return "console";
   return hostname.split(".")[0] === "console" ? "console" : "university";
 }
 

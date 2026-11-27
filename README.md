@@ -10,7 +10,7 @@ There is no Node on the dev Mac; use Bun.
 export PATH=$HOME/.bun/bin:$PATH
 bun install
 
-# Against the real API (odel-backend on :8080, dev profile)
+# Against the real API (odel-backend gateway on :9300, dev profile: scripts/dev/run-all.sh)
 bun run dev                 # http://wesley.localhost:3000/staff
 
 # Without the API: typed fixtures that follow the contract
@@ -38,7 +38,7 @@ The host decides the surface (`src/proxy.ts`): `console.*` serves the console, w
 
 | Variable | Default | |
 |---|---|---|
-| `ODEL_API_URL` | `http://localhost:8080` | Where `/api/*` is forwarded |
+| `ODEL_API_URL` | `http://localhost:9300` | Where `/api/*` is forwarded (the api-gateway) |
 | `ODEL_MOCK_API` | unset | `1` = mock mode. Never set in production |
 | `ODEL_MOCK_SEED` | `demo` | Mock only: `demo` seeds Wesley and Crestfield, `empty` starts with no universities (SA-01 empty state) |
 
@@ -70,7 +70,7 @@ bun run build
 bun run test                                   # Playwright, mock mode, against the build (port 3100)
 SCREENSHOTS=1 bunx playwright test screenshots # review screenshots into ./screenshots (gitignored)
 
-# End to end against the real API (API on :8080 dev profile, `bun run dev` on :3000):
+# End to end against the real API (gateway on :9300, dev profile, `bun run dev` on :3000):
 bunx playwright test -c playwright.real.config.ts
 # If the seeded people already have two-step sign-in, pass their secrets:
 # ODEL_TOTP_CHUKA_OBI=… ODEL_TOTP_NGOZI_ADEBAYO=… bunx playwright test -c playwright.real.config.ts

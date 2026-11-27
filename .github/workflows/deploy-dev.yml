@@ -1,0 +1,88 @@
+name: Deploy to Dev VPS
+
+on:
+  push:
+    branches: [develop]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch:
+
+concurrency:
+  group: web-dev-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USER_NAME: ${{ secrets.VPS_USER }}
+          KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          [ -n "$HOST" ] && [ -n "$USER_NAME" ] && [ -n "$KEY" ] || { echo "::error::VPS_HOST, VPS_USER and VPS_SSH_KEY secrets are needed"; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run lint && bun run typecheck
+
+      - name: Build
+        run: bun run build
+        env:
+          NEXT_PUBLIC_ODEL_CONSOLE_HOST: odel-console-dev.oyeksglobal.com
+
+      # The standalone server plus its static files and public/, as one tarball (same as hospio-frontend).
+      - name: Prepare standalone bundle
+        run: |
+          out=.next/standalone
+          mkdir -p "$out/.next"
+          cp -r .next/static "$out/.next/static"
+          cp -r public "$out/public"
+          echo "${{ github.sha }}" > "$out/.sha"
+          tar -czf bundle.tar.gz -C "$out" .
+
+      - name: Copy bundle to server
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          remote() { for i in 1 2 3; do "$@" && return 0; echo "attempt $i failed, retrying in $((i*8))s"; sleep $((i*8)); done; return 1; }
+          remote ssh -i ~/.ssh/deploy_key -o ConnectTimeout=30 "$VPS_USER@$VPS_HOST" "mkdir -p apps/odel-web-dev"
+          remote scp -i ~/.ssh/deploy_key -o ConnectTimeout=30 bundle.tar.gz "$VPS_USER@$VPS_HOST:apps/odel-web-dev/bundle.tar.gz"
+          rm -f ~/.ssh/deploy_key
+
+      - uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          # The odel-web-dev unit is installed by odel-backend's scripts/vps/bootstrap-dev.sh.
+          script: |
+            set -e
+            cd "$HOME/apps/odel-web-dev"
+            if [ -d current ]; then rm -rf previous; mv current previous; fi
+            mkdir -p current
+            tar -xzf bundle.tar.gz -C current
+            rm -f bundle.tar.gz
+            sudo systemctl restart odel-web-dev.service
+            for i in $(seq 1 20); do
+              sleep 2
+              if curl -fsS -o /dev/null -H "Host: odel-dev.oyeksglobal.com" "http://127.0.0.1:3100/"; then echo "Web is up on :3100"; rm -rf previous; exit 0; fi
+            done
+            echo "Web did not answer on :3100 — rolling back"
+            sudo journalctl -u odel-web-dev.service -n 40 --no-pager || true
+            if [ -d previous ]; then rm -rf current; mv previous current; sudo systemctl restart odel-web-dev.service; fi
+            exit 1

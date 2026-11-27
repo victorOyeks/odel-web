@@ -1,5 +1,5 @@
 /** Server-only settings read from the environment. */
-export const API_URL = (process.env.ODEL_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
+export const API_URL = (process.env.ODEL_API_URL ?? "http://localhost:9300").replace(/\/$/, "");
 
 /** Mock mode: typed fixtures instead of the real API. Never on in production deploys. */
 export const MOCK_API = process.env.ODEL_MOCK_API === "1";
