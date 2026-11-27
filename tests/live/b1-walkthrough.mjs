@@ -972,7 +972,7 @@ await group("N", "Welcome emails (W-20, W-20d, W-20c)", async () => {
   });
   await step(a, "Send to everyone with an email (after checking none is a real address): progress, then the delivery report (W-20c)", async () => {
     const report = await sendToAll();
-    await report.getByText(/emails delivered/).waitFor(); await report.getByText(/did not get the welcome/).waitFor();
+    await report.getByText(/emails delivered/).waitFor(); await report.getByText(/students? did not get the welcome$/).first().waitFor();
     await report.getByRole("table", { name: /did not get the welcome/ }).getByText(/Ibrahim Musa|Musa Ibrahim/).first().waitFor();
   });
   await step(a, `This run's student's welcome is in the log with the activation link`, async () => {
@@ -1065,7 +1065,7 @@ await group("O", `Activation on a phone (M-01 … M-06, E-01 … E-03), 390 px: 
       await pw("New password").fill(ADEOLA.password); await pw("Confirm password").fill(ADEOLA.password); await s.getByRole("button", { name: "Save and sign in" }).click(); await home().waitFor();
     }
     who = "student";
-  });
+  }, { allow: [401, 409, 423] }); // her first try may find her not active yet or with another password
 });
 
 // ================================================================== P · second send
@@ -1176,8 +1176,9 @@ await group("S", "The university's audit log", async () => {
   });
   await step(a, "Dr Bello's suspension and two-step reset", async () => { await has("ROLES", /Suspended Dr Funmi Bello: On leave from 1 Dec/); await has("SIGN_IN", /Reset Dr Funmi Bello's two-step sign-in: Lost phone/); });
   await step(a, "Entries carry the person's own IP address, not the server's", async () => {
-    await a.goto(`${UNI}/staff/reports/audit`); const ips = [...new Set((await W("/audit?size=50")).body.items.map((x) => x.ip))];
-    if (ips.some((ip) => /^(127\.|::1$|0:0:0:0:0:0:0:1$)/.test(ip ?? ""))) throw new Error(`audit IPs: ${ips.join(", ")}`);
+    await a.goto(`${UNI}/staff/reports/audit`);
+    const local = (await W("/audit?size=50")).body.items.filter((x) => /^(127\.|::1$|0:0:0:0:0:0:0:1$)/.test(x.ip ?? ""));
+    if (local.length) throw new Error(`entries with the server's own IP: ${[...new Set(local.map((x) => `${x.action}: ${x.summary.slice(0, 60)}`))].join(" | ")}`);
   });
 });
 
