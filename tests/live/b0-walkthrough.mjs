@@ -242,9 +242,16 @@ await group("F · Provider sees it all (SA-01b, SA-09)", async () => {
 await group("G · Clean up: the test university is deleted", async () => {
   await step(c, "Provider deletes Lakeshore (dev only)", async () => {
     if (!uniId) throw new Error("the test university was not created, nothing to delete");
-    const xsrf = (await consoleCtx.cookies(CONSOLE)).find((k) => k.name === "XSRF-TOKEN")?.value ?? "";
-    const r = await c.request.delete(`${CONSOLE}/api/v1/dev/tenants/${uniId}`, { headers: { "X-XSRF-TOKEN": xsrf } });
-    if (r.status() !== 204) throw new Error(`delete answered ${r.status()}: ${await r.text()}`);
+    // Sent from inside the signed-in console page, the way the app sends requests (session cookie + CSRF header).
+    if (!c.url().startsWith(CONSOLE)) await c.goto(CONSOLE);
+    const r = await c.evaluate(async (id) => {
+      const read = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? "");
+      if (!read()) await fetch("/api/v1/public/context"); // like the app: any GET sets the CSRF cookie
+      const xsrf = read();
+      const res = await fetch(`/api/v1/dev/tenants/${id}`, { method: "DELETE", headers: { "X-XSRF-TOKEN": xsrf } });
+      return { status: res.status, body: await res.text() };
+    }, uniId);
+    if (r.status !== 204) throw new Error(`delete answered ${r.status}: ${r.body}`);
   });
   await step(a, "Its address now shows 'not set up'", async () => {
     await a.waitForTimeout(61_000); // the gateway remembers an address for a minute
