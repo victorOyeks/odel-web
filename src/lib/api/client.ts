@@ -25,7 +25,7 @@ async function ensureXsrf(): Promise<string | null> {
  * Adds the CSRF header on writes and tells the idle timer about activity.
  */
 export async function api<T = void>(
-  method: "GET" | "POST" | "PUT" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<ApiResult<T>> {

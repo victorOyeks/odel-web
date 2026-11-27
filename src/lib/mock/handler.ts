@@ -485,7 +485,7 @@ export async function mockHandle(req: Request, host: string): Promise<Response> 
     if (method === "GET" && path === "/platform/tenants/address-available") {
       const web = (url.searchParams.get("webAddress") ?? "").toLowerCase();
       const slug = (url.searchParams.get("slug") ?? "").toLowerCase();
-      const webOwner = st.tenants.find((t) => t.webAddress.toLowerCase() === web);
+      const webOwner = st.tenants.find((t) => (t.webAddress ?? "").toLowerCase() === web);
       const slugOwner = st.tenants.find((t) => t.slug === slug || t.host === slug);
       return json(200, {
         webAddress: webOwner
@@ -541,11 +541,14 @@ export async function mockHandle(req: Request, host: string): Promise<Response> 
           },
         });
       }
-      if (st.tenants.some((t) => t.webAddress.toLowerCase() === b.webAddress!.toLowerCase())) return err(409, "web_address_taken", "That web address is taken.");
+      if (st.tenants.some((t) => (t.webAddress ?? "").toLowerCase() === b.webAddress!.toLowerCase())) return err(409, "web_address_taken", "That web address is taken.");
       if (st.tenants.some((t) => t.slug === b.slug)) return err(409, "slug_taken", "That short address is taken.");
       const t: MockTenant = {
         id: crypto.randomUUID(),
         host: b.slug!,
+        portalUrl: `http://${b.slug}.localhost:3000`,
+        platformUrl: `http://${b.slug}.localhost:3000`,
+        customDomain: null,
         name: b.name!,
         shortName: b.shortName!,
         slug: b.slug!,

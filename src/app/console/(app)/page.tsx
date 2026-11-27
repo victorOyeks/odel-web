@@ -85,7 +85,7 @@ export default async function UniversitiesPage() {
                 </td>
                 <td className="px-3 text-body-sm">{count(t.students)}</td>
                 <td className="px-3 text-body-sm">{count(t.centres)}</td>
-                <td className="truncate px-3 text-body-sm">{t.webAddress}</td>
+                <td className="truncate px-3 text-body-sm">{t.webAddress ?? `${t.slug} (platform address)`}</td>
                 <td className="hidden truncate px-3 text-body-sm xl:table-cell">
                   {t.firstAdmin ? `${t.firstAdmin.fullName}${t.firstAdmin.accepted ? "" : " · invited"}` : "—"}
                 </td>
@@ -106,7 +106,7 @@ export default async function UniversitiesPage() {
                 <span className="min-w-0 flex-1 text-label-lg text-ink">{t.name}</span>
                 <TenantStatusBadge status={t.status} />
               </span>
-              <span className="text-body-sm text-ink-2">{t.webAddress}</span>
+              <span className="text-body-sm text-ink-2">{t.webAddress ?? `${t.slug} (platform address)`}</span>
               <span className="flex items-center gap-4 text-body-sm text-ink-2">
                 <span>Students {count(t.students)}</span>
                 <span>Centres {count(t.centres)}</span>

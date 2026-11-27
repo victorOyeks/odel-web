@@ -13,6 +13,7 @@ import { RetryButton } from "@/components/states/retry-button";
 import { KeyValues } from "@/components/console/kv";
 import { statusLabel } from "@/components/console/status-badge";
 import { ResendInvitation } from "@/components/console/resend-invitation";
+import { CustomDomainCard } from "@/components/console/custom-domain-card";
 
 export const metadata: Metadata = { title: "University" };
 
@@ -95,12 +96,12 @@ export default async function UniversityPage({ params, searchParams }: PageProps
 
   return (
     <>
-      <PageHeader title={t.name} subtitle={`${statusLabel(t.status)} · created ${formatWhen(t.createdAt)}${by} · ${t.webAddress}`} />
+      <PageHeader title={t.name} subtitle={`${statusLabel(t.status)} · created ${formatWhen(t.createdAt)}${by} · ${t.portalUrl.replace(/^https?:\/\//, "")}`} />
       {steps}
       <KeyValues
         rows={[
           { label: "University", value: `${t.name} · ${t.shortName}` },
-          { label: "Web address", value: `${t.webAddress} · short address ${t.slug}` },
+          { label: "Short address", value: t.slug },
           { label: "Staff sign-in", value: `Google accounts ending @${t.googleDomain}` },
           {
             label: "Branding",
@@ -130,6 +131,7 @@ export default async function UniversityPage({ params, searchParams }: PageProps
           },
         ]}
       />
+      <CustomDomainCard tenantId={t.id} platformUrl={t.platformUrl} domain={t.customDomain} />
       {t.status === "SETTING_UP" ? (
         <Banner tone="info" title={`${t.name.split(" ")[0]} goes live when ${admin?.fullName ?? "the first admin"} accepts the invitation and finishes the setup checklist.`}>
           Until then students cannot sign in.

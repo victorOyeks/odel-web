@@ -130,7 +130,7 @@ export interface TenantListItem {
   name: string;
   shortName: string;
   slug: string;
-  webAddress: string;
+  webAddress: string | null;
   status: TenantStatus;
   students: number;
   centres: number;
@@ -161,12 +161,29 @@ export interface NewTenant {
   firstAdmin: { fullName: string; email: string };
 }
 
+export type WebAddressStatus = "NONE" | "WAITING_DNS" | "DNS_FOUND" | "LIVE";
+
+export interface CustomDomain {
+  address: string;
+  status: WebAddressStatus;
+  recordType: "CNAME";
+  pointTo: string;
+  checkedAt: string | null;
+  problem: string | null;
+  liveAt: string | null;
+}
+
 export interface TenantDetail {
   id: string;
   name: string;
   shortName: string;
   slug: string;
-  webAddress: string;
+  webAddress: string | null;
+  /** Where people go: the own domain once LIVE, else the platform address. */
+  portalUrl: string;
+  /** Always live: https://<slug>.<base domain>. */
+  platformUrl: string;
+  customDomain: CustomDomain | null;
   googleDomain: string;
   status: TenantStatus;
   createdAt: string;

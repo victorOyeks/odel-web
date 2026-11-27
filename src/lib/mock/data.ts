@@ -15,6 +15,9 @@ export function seedTenants(): MockTenant[] {
     {
       id: "7b0f8a52-1c1e-4f0e-9f61-6b1f8c1a0001",
       host: "wesley",
+      portalUrl: "http://wesley.localhost:3000",
+      platformUrl: "http://wesley.localhost:3000",
+      customDomain: null,
       name: "Wesley University",
       shortName: "Wesley ODeL",
       slug: "wesley",
@@ -38,6 +41,9 @@ export function seedTenants(): MockTenant[] {
     {
       id: "7b0f8a52-1c1e-4f0e-9f61-6b1f8c1a0002",
       host: "crestfield",
+      portalUrl: "http://crestfield.localhost:3000",
+      platformUrl: "http://crestfield.localhost:3000",
+      customDomain: null,
       name: "Crestfield University",
       shortName: "Crestfield ODeL",
       slug: "crestfield",
