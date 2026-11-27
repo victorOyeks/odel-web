@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { getContext, getSession } from "@/lib/api/server";
 import { getSurface } from "@/lib/request";
 import { homePath, safeNext } from "@/lib/host";
-import { AuthLayout, AuthLead, AuthTitle } from "@/components/auth/auth-layout";
+import { AuthEyebrow, AuthLayout, AuthLead, AuthTitle } from "@/components/auth/auth-layout";
+import { Icon } from "@/components/ui/icon";
 import { GoogleButton } from "@/components/auth/google-button";
 import { Banner } from "@/components/ui/banner";
 import { pathForStage } from "@/components/auth/routing";
@@ -91,9 +92,12 @@ export default async function SignInPage({ searchParams }: PageProps<"/staff/sig
         </>
       ) : (
         <>
-          <AuthTitle>
-            {error === "no_role" ? "Your account has no role yet" : notLinked ? "We could not find your staff record" : surface === "console" ? "Provider sign in" : "Staff sign in"}
-          </AuthTitle>
+          <div className="flex flex-col gap-2">
+            <AuthEyebrow>{surface === "console" ? "Provider console" : "Staff portal"}</AuthEyebrow>
+            <AuthTitle>
+            {error === "no_role" ? "Your account has no role yet" : notLinked ? "We could not find your staff record" : surface === "console" ? "Sign in to the console" : "Sign in to your staff account"}
+            </AuthTitle>
+          </div>
           {!notLinked ? (
             <AuthLead>
               {t.googleDomain
@@ -107,11 +111,29 @@ export default async function SignInPage({ searchParams }: PageProps<"/staff/sig
             </Banner>
           ) : null}
           <GoogleButton returnTo={next} />
+          <p className="flex items-start gap-2 text-body-sm text-ink-3">
+            <Icon name="lock" size={16} className="mt-0.5 shrink-0" />
+            After Google, you confirm it is you with a 6-digit code from your authenticator app.
+          </p>
           {surface === "university" ? (
             <>
-              <p className="text-body-sm text-ink-3">Students sign in on the student portal with their matric number.</p>
-              <Link href="/" className="self-start text-label text-brand underline-offset-4 hover:underline">
-                Go to student sign-in
+              <div className="flex items-center gap-3 text-body-sm text-ink-3" role="separator">
+                <span className="h-px flex-1 bg-line" />
+                Are you a student?
+                <span className="h-px flex-1 bg-line" />
+              </div>
+              <Link
+                href="/"
+                className="group flex items-center gap-3 rounded-xl border border-line px-4 py-3.5 hover:border-brand-muted hover:bg-brand-subtle"
+              >
+                <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-brand">
+                  <Icon name="school" size={20} />
+                </span>
+                <span className="flex flex-1 flex-col">
+                  <span className="text-label text-ink">Go to student sign-in</span>
+                  <span className="text-body-sm text-ink-3">Students use their matric number</span>
+                </span>
+                <Icon name="arrow_forward" size={20} className="text-ink-3 group-hover:text-brand" />
               </Link>
             </>
           ) : null}
