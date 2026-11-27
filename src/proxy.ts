@@ -7,6 +7,17 @@ import { browserHost, surfaceForHost } from "@/lib/host";
 // Paths that are the same on every host.
 const SHARED = [/^\/auth\/continue/, /^\/offline/, /^\/dev\//, /^\/pwa-icon/, /^\/manifest\.webmanifest$/, /^\/sw\.js$/];
 
+/**
+ * Behind nginx the request URL says https (X-Forwarded-Proto) while Next.js itself listens on plain http,
+ * and a rewrite whose origin differs from the server's is treated as an external proxy. Rewrites keep http.
+ */
+function internal(req: NextRequest, pathname: string) {
+  const url = req.nextUrl.clone();
+  url.protocol = "http:";
+  url.pathname = pathname;
+  return url;
+}
+
 export function proxy(req: NextRequest) {
   const host = browserHost(req.headers);
   const surface = surfaceForHost(host);
@@ -18,14 +29,12 @@ export function proxy(req: NextRequest) {
 
   if (surface === "console") {
     if (!SHARED.some((re) => re.test(pathname)) && !pathname.startsWith("/console")) {
-      const url = req.nextUrl.clone();
-      url.pathname = `/console${pathname === "/" ? "" : pathname}`;
+      const url = internal(req, `/console${pathname === "/" ? "" : pathname}`);
       return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
     }
   } else if (pathname === "/console" || pathname.startsWith("/console/")) {
     // The provider console is not reachable from a university's address.
-    const url = req.nextUrl.clone();
-    url.pathname = "/_not-found";
+    const url = internal(req, "/_not-found");
     return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
   }
   return NextResponse.next({ request: { headers: requestHeaders } });
