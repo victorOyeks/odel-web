@@ -968,7 +968,11 @@ await group("Q", "Student sign-in, lockout and reset by code (M-08, E-04, E-05, 
     await signIn("Wrong-pass1"); await s.getByText(/Wrong password\. 4 tries left/).waitFor();
   });
   await step(s, "Negative - five wrong passwords lock sign-in with the time (E-05)", async () => {
-    for (let i = 2; i <= 5; i++) { await pw("Password").fill(`Wrong-pass${i}`); await s.getByRole("button", { name: "Sign in" }).click(); await s.waitForTimeout(600); }
+    // Wait for each answer before the next try: the page clears the password field when the answer arrives.
+    for (let i = 2; i <= 5; i++) {
+      await pw("Password").fill(`Wrong-pass${i}`); await s.getByRole("button", { name: "Sign in" }).click();
+      await (i < 5 ? s.getByText(new RegExp(`Wrong password\\. ${5 - i} tr(y|ies) left`)) : s.getByText("Too many attempts")).waitFor();
+    }
     await s.getByText("Too many attempts").waitFor(); await s.getByText(/until \d{1,2}:\d{2}\s?[ap]m/).first().waitFor();
     if (await s.getByRole("button", { name: "Sign in" }).isEnabled()) throw new Error("Sign in is still enabled while locked");
     await noSideways(s);
