@@ -16,9 +16,10 @@ export function Logo({
   inverse?: boolean;
 }) {
   if (logoUrl) {
-    // Logos are small, tenant-supplied and signed URLs; next/image would need every storage host whitelisted.
+    // A stable, versioned address the browser caches for a year; it is in the server-rendered HTML (and preloaded by the
+    // root layout), with its size set, so the crest shows with the page instead of popping in after it.
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={logoUrl} alt="" className={cn("h-10 w-11 shrink-0 object-contain", className)} />;
+    return <img src={logoUrl} alt="" width={44} height={40} fetchPriority="high" decoding="sync" className={cn("h-10 w-11 shrink-0 object-contain", className)} />;
   }
   const letters = name
     .split(/\s+/)

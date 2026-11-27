@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Kumbh_Sans } from "next/font/google";
 import localFont from "next/font/local";
+import { preload } from "react-dom";
 import { getContext } from "@/lib/api/server";
 import { brandStyle, PLATFORM_BRAND } from "@/lib/brand";
 import { PortalUnavailable } from "@/components/portal-unavailable";
@@ -36,6 +37,8 @@ export async function generateViewport(): Promise<Viewport> {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const ctx = await getContext();
+  // The crest starts downloading with the page (a <link rel="preload"> in the head), on every staff, student and console page.
+  if (ctx.ok && ctx.data.tenant.logoUrl) preload(ctx.data.tenant.logoUrl, { as: "image", fetchPriority: "high" });
   const primary = ctx.ok ? ctx.data.tenant.primaryColor : PLATFORM_BRAND.primary;
   const accent = ctx.ok ? ctx.data.tenant.accentColor : PLATFORM_BRAND.accent;
   return (
