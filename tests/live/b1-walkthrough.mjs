@@ -1,8 +1,13 @@
-// B1 end-to-end walkthrough against the hosted dev site, in a visible browser.
-// Run: ODEL_E2E_PROVIDER_TOTP=<secret> bun tests/live/b1-walkthrough.mjs   (SLOW=ms between actions, SLUG=short address, UNTIL=last group letter)
-// A fresh test university (Lakeshore) is created through the console and walked through phase B1: setup, staff, students,
-// welcome emails, student activation and sign-in, the audit log and isolation from Wesley. Every person has a .test address,
-// so nothing is emailed for real; codes and links are read from the dev email log. The university is deleted at the end, always.
+// B1 end-to-end walkthrough on Wesley University (the pilot university) on the hosted dev site, in one visible browser window.
+// Run: ODEL_E2E_PROVIDER_TOTP=<Chuka's secret> ODEL_E2E_ADMIN_TOTP=<Ngozi's secret> bun tests/live/b1-walkthrough.mjs
+//   ONLY=D,K   run just those groups (sign-in happens as needed); RUN=123 reuse the per-run student of an earlier run;
+//   SLOW=ms between actions (default 600).
+// Re-runnable: Wesley keeps the story data (2026/2027, Science → Computer Science → B.Sc. Computer Science, CSC 201, Akure with
+// Room 1, Dr Bello, Mrs Ade, default grading, the imported students with Adeola Okafor). Each run finds what exists and creates
+// only what is missing; refused negative cases never create anything. One-time student flows (activation, lockout, reset,
+// suspension) use a fresh student per run (WU/ODL/24/9NNN). Students have .test addresses and staff are on wesleyuni.edu.ng,
+// which the dev allow-list never emails: codes and links are read from the dev email log. Only the add-a-university wizard
+// (group W) creates a throwaway university, and deletes it again. Secrets come only from the command line.
 import { chromium } from "playwright";
 import { createHmac } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -16,7 +21,9 @@ const BASE = "odel-dev.oyeksglobal.com";
 // The provider admin's authenticator secret is never in the repo: pass it in ODEL_E2E_PROVIDER_TOTP.
 const CHUKA = { email: "chuka.obi@oyeksglobal.com", secret: process.env.ODEL_E2E_PROVIDER_TOTP ?? "" };
 if (!CHUKA.secret) { console.error("Set ODEL_E2E_PROVIDER_TOTP to the provider admin's authenticator secret."); process.exit(2); }
-const UNTIL = (process.env.UNTIL ?? "Z").toUpperCase();
+const NGOZI_SECRET = process.env.ODEL_E2E_ADMIN_TOTP ?? "";
+if (!NGOZI_SECRET) { console.error("Set ODEL_E2E_ADMIN_TOTP to Ngozi Adebayo's authenticator secret."); process.exit(2); }
+const ONLY = (process.env.ONLY ?? "").toUpperCase().split(",").map((x) => x.trim()).filter(Boolean);
 
 // ---- two-step codes (RFC 6238), each used once ----
 function b32(s) {
@@ -133,7 +140,7 @@ function apiProblems(title, allow) {
 }
 
 // ---- checkpoint screenshots (viewport only), numbered in run order, in a fresh folder for this run ----
-const SHOTS = `${homedir()}/Desktop/ODeL test screenshots/B1 end to end (${new Date().toISOString().slice(0, 10)})`;
+const SHOTS = `${homedir()}/Desktop/ODeL test screenshots/B1 end to end (${new Date().toISOString().slice(0, 10)})${ONLY.length ? ` - only ${ONLY.join(",")}` : ""}`;
 rmSync(SHOTS, { recursive: true, force: true }); mkdirSync(SHOTS, { recursive: true });
 let shots = 0;
 async function shot(page, name) {
@@ -225,9 +232,8 @@ function apiSummary() {
   console.log(`    API: ${groupCalls.length} calls · ${Object.entries(by).map(([k, v]) => `${k}×${v}`).join(" ")}${errs.length ? ` · errors: ${errs.join("; ")}` : ""}`);
   groupCalls.length = 0;
 }
-let stopped = false;
-async function group(letter, name, fn, { always = false } = {}) {
-  if (!always && (stopped || letter > UNTIL)) { stopped = true; return; }
+async function group(letter, name, fn) {
+  if (ONLY.length && !ONLY.includes(letter)) return;
   console.log(`\n${letter} · ${name}`);
   try { await fn(); } catch { console.log("    (rest of this group skipped)"); }
   apiSummary();
@@ -280,7 +286,8 @@ async function staffIn(person) {
     if (person.trust) { const t = p.getByText("Trust this computer for 30 days"); if (await t.isVisible()) await t.click(); }
     await p.getByRole("button", { name: "Verify" }).click();
   }
-  await p.waitForURL((u) => u.pathname.startsWith("/staff") && !u.pathname.startsWith("/staff/sign-in"));
+  await p.waitForURL((u) => (u.pathname.startsWith("/staff") && !u.pathname.startsWith("/staff/sign-in")) || u.pathname.endsWith("/role"));
+  if (p.url().includes("/role")) { await p.getByRole("button", { name: /Continue as/ }).first().click(); await p.waitForURL((u) => !u.pathname.startsWith("/staff/sign-in")); }
   who = person.key;
 }
 
@@ -333,17 +340,29 @@ async function expectDone(page, ...nums) {
   }
 }
 
-const slug = process.env.SLUG ?? "lakeshore";
-const DOMAIN = "lakeshore.test";
-const uni = { name: "Lakeshore University", short: "Lakeshore ODeL", slug, admin: "Bola Ige", email: `bola.ige@${DOMAIN}` };
-const UNI = `https://${slug}.${BASE}`;
+// ---- Wesley and the people of the story ----
+const UNI = WESLEY;
+const DOMAIN = "wesleyuni.edu.ng";
+const NGOZI = { name: "Ngozi Adebayo", email: `ngozi.adebayo@${DOMAIN}` };
+const ADMIN = { key: "admin", pick: NGOZI.email, secret: () => NGOZI_SECRET, trust: true };
 const BELLO = { name: "Dr Funmi Bello", email: `f.bello@${DOMAIN}` };
 const ADE = { name: "Mrs Bisi Ade", email: `b.ade@${DOMAIN}` };
-const ADEOLA = { matric: "LU/ODL/24/0153", email: `adeola.okafor@${DOMAIN}`, name: "Adeola Okafor" };
-const NO_EMAIL = "LU/ODL/24/0201";
-let adminSecret = null, belloSecret = null, uniId = null;
+const KEMI = { name: "Dr Kemi Ola", email: `k.ola@${DOMAIN}` };
+const ADEOLA = { matric: "WU/ODL/24/0153", email: "adeola.okafor@wesley.test", name: "Adeola Okafor", password: "Adeola2026" };
+const NO_EMAIL = "WU/ODL/24/0201";
+const GRACE = { matric: "WU/ODL/25/0389", first: "Grace", surname: "Nwosu" };
+// The student for this run's one-time flows (activation, lockout, reset, suspension): a fresh matric number each run.
+const RUN = process.env.RUN ?? String(100 + (Math.floor(Date.now() / 60000) % 900));
+const letters = (d) => [...d].map((x) => "abcdefghij"[Number(x)]).join("");
+const P = { matric: `WU/ODL/24/9${RUN}`, first: "Tobi", surname: `Run${letters(RUN)}`, email: `tobi.run${RUN}@wesley.test` };
+P.name = `${P.first} ${P.surname}`;
+const PORTAL_NAME = `wesley_portal_export_${RUN}.csv`;
+const ALLOWED_REAL = ["gmail.com", "oyeksglobal.com"]; // the dev allow-list: these really get email
+let belloSecret = null;
+const found = {}; // what this run found on Wesley (codes, ids)
 
-/** Dev only: delete a university, sent from inside the signed-in console page (session cookie + CSRF header, like the app). */
+const enc = encodeURIComponent;
+const isAllowedReal = (email) => !!email && ALLOWED_REAL.some((d) => email.toLowerCase().endsWith(`@${d}`) || email.toLowerCase().endsWith(`.${d}`));
 async function consoleIn() {
   await desk(); await c.goto(CONSOLE);
   if (/sign-in/.test(c.url())) { // the console session may have ended after 30 idle minutes
@@ -351,6 +370,7 @@ async function consoleIn() {
     await typeCode(c, await code(CHUKA.secret)); await c.getByRole("button", { name: "Verify" }).click(); await c.getByText(/Wesley University/).first().waitFor();
   }
 }
+/** Dev only: delete a throwaway university, sent from inside the signed-in console page (session cookie + CSRF header). */
 async function deleteUni(id) {
   await consoleIn();
   const r = await c.evaluate(async (id) => {
@@ -361,545 +381,636 @@ async function deleteUni(id) {
   }, id);
   if (r.status !== 204) throw new Error(`delete answered ${r.status}: ${r.body}`);
 }
+/** Ngozi signs in if she is not the one signed in (a visible step only when something happens). */
+async function asAdmin() {
+  if (who === "admin") return;
+  await step(a, "Ngozi Adebayo signs in (Google, then her two-step code; trusted computer after the first time)", () => staffIn(ADMIN));
+}
+const W = (path) => apiGet(a, `/api/v1${path}`);
+async function onWesley() { if (!p.url().startsWith(UNI) || /sign-in/.test(p.url())) await p.goto(`${UNI}/staff/setup`); }
+/** An open dialog: fits the window, buttons visible, no overlapping text, done loading within 5 s; then a checkpoint shot. */
+async function dialogOk(page, name) {
+  await page.waitForTimeout(400);
+  let lay = await layoutProblems(page).catch(() => []);
+  for (let t = 0; t < 5 && lay.some((x) => x.startsWith("LOADING")); t++) { await page.waitForTimeout(1000); lay = await layoutProblems(page).catch(() => []); }
+  lay = lay.map((x) => (x.startsWith("LOADING") ? `"Loading…" still shows after 5 seconds ${x.slice(8)}` : x));
+  if (lay.length) throw new Error(`Layout: ${lay.join(" | ")}`);
+  await shot(page, `Dialog - ${name}`);
+}
+function findIn(st, { fac, dep, prog }) {
+  for (const f of st.faculties ?? []) {
+    if (fac && !(fac.codes.includes(f.code) || fac.names.test(f.name))) continue;
+    if (!dep) return { f };
+    for (const d of f.departments ?? []) {
+      if (!(dep.codes.includes(d.code) || dep.names.test(d.name))) continue;
+      if (!prog) return { f, d };
+      for (const pr of d.programmes ?? []) if (prog.codes.includes(pr.code) || prog.names.test(pr.name)) return { f, d, pr };
+    }
+  }
+  return {};
+}
+const SCI = { codes: ["SCI"], names: /^Faculty of Science$/ };
+const CSC = { codes: ["CSC"], names: /^(Department of )?Computer Science$/ };
+const BSC = { codes: ["BSC-CSC", "BSC-CSC-ODL"], names: /^B\.Sc\. Computer Science$/ };
+const MGT = { codes: ["MGT"], names: /^Faculty of Management Sciences$/ };
+const ACC = { codes: ["ACC"], names: /^(Department of )?Accounting$/ };
+const BACC = { codes: ["BSC-ACC", "BSC-ACC-ODL"], names: /^B\.Sc\. Accounting$/ };
+async function programmeCodes() {
+  const st = (await W("/academic/structure")).body;
+  found.csc = findIn(st, { fac: SCI, dep: CSC, prog: BSC }).pr?.code ?? null;
+  found.acc = findIn(st, { fac: MGT, dep: ACC, prog: BACC }).pr?.code ?? findIn(st, { fac: { codes: [], names: /./ }, dep: { codes: [], names: /./ }, prog: BACC }).pr?.code ?? null;
+  return st;
+}
+async function courseExists(codeStr) {
+  const r = await W(`/academic/courses?search=${enc(codeStr)}&size=50`);
+  return (r.body?.items ?? []).find((x) => x.code === codeStr) ?? null;
+}
 
-await group("A", "Provider signs in to the console", async () => {
-  await step(c, "Console asks to sign in", async () => { await c.goto(CONSOLE); await c.waitForURL(/\/sign-in/); });
-  await step(c, "Chuka Obi chosen on the dev Google page, then his two-step code", async () => {
+// ================================================================== W · the add-a-university wizard (throwaway)
+await group("W", "Provider console: the add-a-university wizard on a throwaway university (SA-02 to SA-05b), deleted again", async () => {
+  const wslug = `wizard${RUN}`;
+  const WUNI = `https://${wslug}.${BASE}`;
+  let wid = null;
+  await step(c, "Console sign-in: Chuka Obi on the dev Google page, then his two-step code", async () => {
+    await c.goto(CONSOLE); await c.waitForURL(/\/sign-in/);
     await google(c, "Chuka Obi"); await c.getByText("Enter your 6-digit code").waitFor();
     await typeCode(c, await code(CHUKA.secret)); await c.getByRole("button", { name: "Verify" }).click();
     await c.getByText(/Wesley University/).first().waitFor();
   });
-  await step(c, "A Lakeshore left by an interrupted run is deleted first", async () => {
+  await step(c, "Wizard universities left by an interrupted run are deleted first", async () => {
     const r = await apiGet(c, "/api/v1/platform/tenants");
-    const old = r.body?.items?.find((t) => t.slug === slug);
-    if (old) { await deleteUni(old.id); console.log("      (deleted a leftover test university; waiting a minute for the gateway to forget it)"); await c.waitForTimeout(61_000); }
+    for (const t of (r.body?.items ?? []).filter((t) => /^wizard\d+$/.test(t.slug))) { await deleteUni(t.id); console.log(`      (deleted the leftover ${t.slug})`); }
   });
+  try {
+    await step(c, "Add a university: Next with nothing filled in shows what is missing (SA-02c)", async () => {
+      await c.goto(`${CONSOLE}/universities/new`); await c.getByText("Add a university").first().waitFor();
+      await c.getByRole("button", { name: "Next: branding" }).click(); await c.getByText(/Enter|Type/).first().waitFor();
+    });
+    await step(c, "Negative - a .test domain as its own web address, and the taken short address 'wesley' (SA-02b)", async () => {
+      await c.getByLabel("Full name").fill(`Wizard Test University ${RUN}`); await c.getByLabel("Short name").fill("Wizard ODeL");
+      await c.getByLabel("Own web address (optional)").fill("odl.wizard.test"); await c.getByLabel("Short address").fill("wesley");
+      await c.getByLabel(/First admin’s name/).fill("Amaka Eze"); await c.getByLabel(/First admin’s email/).fill("amaka.eze@wizard.test");
+      await c.getByLabel("Staff Google domain").fill("wizard.test");
+      await c.getByRole("button", { name: "Next: branding" }).click(); await c.getByText(/test domains/).first().waitFor();
+      await c.getByLabel("Own web address (optional)").fill("");
+      await c.getByRole("button", { name: "Next: branding" }).click(); await c.getByText(/already|taken/i).first().waitFor();
+    });
+    await step(c, "Negative - a pale main colour fails the readability check (SA-03b)", async () => {
+      await c.getByLabel("Short address").fill(wslug);
+      await c.getByRole("button", { name: "Next: branding" }).click(); await c.getByLabel("Main colour").first().waitFor();
+      await c.getByLabel("Main colour").first().fill("#F5D76E"); await c.getByText(/hard to read/).first().waitFor();
+    });
+    await step(c, "Readable colours, defaults, review and create (SA-03 to SA-05b)", async () => {
+      await c.getByLabel("Main colour").first().fill("#1F5F7A"); await c.getByLabel("Accent colour").first().fill("#D4A017"); await c.getByText(/reads well/).first().waitFor();
+      await c.getByRole("button", { name: "Next: rules and payments" }).click();
+      await c.getByRole("button", { name: "Next: review" }).click(); await c.getByRole("button", { name: "Create the university" }).click();
+      await c.getByText(/is set up/).first().waitFor();
+      wid = c.url().match(/universities\/([0-9a-f-]{36})/)?.[1] ?? null; if (!wid) throw new Error("no university id in the address");
+      if (!(await c.locator("main").innerText()).includes(`Live at ${WUNI}`)) throw new Error(`expected "Live at ${WUNI}"`);
+    });
+    await step(c, "Its first admin's invitation is in the email log (a .test address: recorded, never sent)", async () => {
+      const m = await waitEmail("amaka.eze@wizard.test", Date.now() - 120_000, (e) => /invited/i.test(e.subject));
+      if (m.status !== "SKIPPED") throw new Error(`the invitation was ${m.status}`);
+    });
+  } finally {
+    if (wid) await step(c, "The throwaway university is deleted (dev only) and leaves the console list", async () => {
+      await deleteUni(wid); await c.goto(CONSOLE); await c.getByText(/Wesley University/).first().waitFor();
+      if ((await c.locator("main").innerText()).includes(`Wizard Test University ${RUN}`)) throw new Error("it is still listed");
+    });
+  }
 });
 
-await group("B", "Provider adds Lakeshore University, staff domain lakeshore.test", async () => {
-  await step(c, "Add a university: details", async () => {
-    await c.goto(`${CONSOLE}/universities/new`); await c.getByText("Add a university").first().waitFor();
-    await c.getByLabel("Full name").fill(uni.name); await c.getByLabel("Short name").fill(uni.short);
-    await c.getByLabel("Short address").fill(uni.slug);
-    await c.getByLabel(/First admin’s name/).fill(uni.admin); await c.getByLabel(/First admin’s email/).fill(uni.email);
-    await c.getByLabel("Staff Google domain").fill(DOMAIN);
-    await c.getByRole("button", { name: "Next: branding" }).click(); await c.getByLabel("Main colour").first().waitFor();
+// ================================================================== A · Ngozi
+await group("A", "Ngozi Adebayo (ODeL admin) signs in on Wesley; the checklist (W-10)", async () => {
+  await step(a, "Wesley's staff sign-in page, in its colours", async () => {
+    await leave(); await a.goto(`${UNI}/staff/sign-in`); await a.getByText("Wesley University").first().waitFor();
   });
-  await step(c, "Branding, defaults, review and create", async () => {
-    await c.getByLabel("Main colour").first().fill("#1F5F7A"); await c.getByLabel("Accent colour").first().fill("#D4A017");
-    await c.getByText(/reads well/).first().waitFor();
-    await c.getByRole("button", { name: "Next: rules and payments" }).click();
-    await c.getByRole("button", { name: "Next: review" }).click();
-    await c.getByRole("button", { name: "Create the university" }).click(); await c.getByText(/is set up/).first().waitFor();
-    uniId = c.url().match(/universities\/([0-9a-f-]{36})/)?.[1] ?? null;
-    if (!uniId) throw new Error("no university id in the address");
+  await step(a, "Negative - a Gmail address is not a Wesley staff account (W-02)", async () => {
+    await google(a, "ngozi@gmail.com"); await a.waitForURL(/error=wrong_domain/);
   });
-  await step(c, "The first admin's invitation is in the email log (a .test address: recorded, not sent)", async () => {
-    const m = await waitEmail(uni.email, Date.now() - 120_000, (e) => /invited/i.test(e.subject));
-    if (!m.body.includes(`${UNI}/staff`)) throw new Error(`the invitation does not link to ${UNI}/staff`);
-  });
-});
-
-const ADMIN = { key: "admin", pick: "Bola Ige", secret: () => adminSecret, trust: true };
-await group("C", "Bola Ige (ODeL admin) gets in: two-step set-up, day-one checklist (W-10)", async () => {
-  await step(a, "Lakeshore's sign-in page", async () => {
-    // The gateway remembers an unknown address for a minute (e.g. right after the previous run deleted it): try again until it opens.
-    for (let i = 0; i < 8; i++) {
-      await a.goto(`${UNI}/staff/sign-in`);
-      if (await a.getByText("Lakeshore University").first().isVisible().catch(() => false)) break;
-      await a.waitForTimeout(10_000);
-    }
-    await a.getByText("Lakeshore University").first().waitFor();
-  }, { allow: [404] });
-  await step(a, "Dev 'Choose an account' lists Bola Ige; two-step set-up shows the key (W-04)", async () => {
-    await google(a, "Bola Ige"); await a.getByText("1. Scan with your authenticator app").waitFor();
-    adminSecret = (await a.locator("p.font-mono").first().innerText()).replace(/\s/g, "");
-  });
-  await step(a, "Right code, backup codes saved, lands on the checklist", async () => {
-    await typeCode(a, await code(adminSecret)); await a.getByRole("button", { name: "Turn on two-step sign-in" }).click();
-    await a.getByText("Save your backup codes").waitFor(); await a.getByRole("button", { name: /saved them/ }).click();
-    await a.waitForURL(/\/staff\/setup$/); who = "admin";
-  });
-  await step(a, "Day one: 0 of 9 steps, import locked until steps 1, 2 and 4, welcome locked", async () => {
-    await a.getByText("0 of 9 steps complete").waitFor();
-    if (!/Finish steps 1, 2 and 4 first/.test(await steps(a).nth(7).innerText())) throw new Error("step 8 is not locked as expected");
-    if (!/Import students first/.test(await steps(a).nth(8).innerText())) throw new Error("step 9 is not locked as expected");
-  });
-  await step(a, "Phone size: the checklist on a 390 px screen does not scroll sideways", async () => {
-    await a.setViewportSize({ width: 390, height: 844 }); await noSideways(a); await a.getByText("0 of 9 steps complete").waitFor();
+  await step(a, "Ngozi chosen, her two-step code, trusted computer: the setup checklist", async () => { await staffIn(ADMIN); await checklist(a); });
+  await step(a, "Phone size: the checklist on a 390 px screen", async () => {
+    await phone(); await a.reload(); await a.getByText(/of 9 steps complete/).waitFor(); await noSideways(a);
   });
   await desk();
 });
 
+// ================================================================== D · sessions
 await group("D", "Sessions and semesters (W-11, W-11c)", async () => {
+  await asAdmin();
   const sheet = a.getByRole("dialog", { name: "New session" });
   const first = sheet.getByRole("group", { name: "First semester" });
   const second = sheet.getByRole("group", { name: "Second semester" });
-  async function dates(s2start = "2027-03-15") {
-    await first.getByLabel("Starts").fill("2026-10-05"); await first.getByLabel("Ends").fill("2027-02-26");
-    await first.getByLabel("Registration opens").fill("2026-10-05"); await first.getByLabel("Registration closes", { exact: true }).fill("2026-10-23");
-    await second.getByLabel("Starts").fill(s2start); await second.getByLabel("Ends").fill("2027-07-30");
+  async function dates(y, s2start = `${y + 1}-03-15`) {
+    await first.getByLabel("Starts").fill(`${y}-10-05`); await first.getByLabel("Ends").fill(`${y + 1}-02-26`);
+    await first.getByLabel("Registration opens").fill(`${y}-10-05`); await first.getByLabel("Registration closes", { exact: true }).fill(`${y}-10-23`);
+    await second.getByLabel("Starts").fill(s2start); await second.getByLabel("Ends").fill(`${y + 1}-07-30`);
   }
-  await step(a, "Start from the checklist: no session yet", async () => {
-    await a.getByRole("link", { name: "Start: Session and semesters" }).click(); await a.getByRole("heading", { name: "No session yet" }).waitFor();
+  async function openNew() { await a.getByRole("button", { name: "New session" }).first().click(); await sheet.waitFor(); }
+  let s2026 = null;
+  await step(a, "Sessions page", async () => {
+    await a.goto(`${UNI}/staff/academic-setup/sessions`); await a.getByRole("heading", { name: "Sessions & semesters" }).first().waitFor();
+    s2026 = (await W("/academic/sessions")).body.items.find((x) => x.name === "2026/2027") ?? null;
   });
   await step(a, "Negative - '2026-27' is refused: write it as 2026/2027", async () => {
-    await a.getByRole("button", { name: "New session" }).first().click();
-    await sheet.getByLabel("Session name").fill("2026-27"); await dates();
+    await openNew(); await dialogOk(a, "New session");
+    await sheet.getByLabel("Session name").fill("2026-27"); await dates(2040);
     await sheet.getByRole("button", { name: "Save draft" }).click(); await sheet.getByText("Write the session as 2026/2027.").first().waitFor();
   });
   await step(a, "Negative - a second semester starting before the first ends is refused", async () => {
-    await sheet.getByLabel("Session name").fill("2026/2027"); await second.getByLabel("Starts").fill("2027-02-01");
+    await sheet.getByLabel("Session name").fill("2040/2041"); await second.getByLabel("Starts").fill("2041-02-01");
     await sheet.getByRole("button", { name: "Save draft" }).click(); await sheet.getByText(/The second semester must start after the first one ends/).first().waitFor();
-  });
-  await step(a, "2026/2027 with two semesters and a registration window saved as a draft", async () => {
-    await second.getByLabel("Starts").fill("2027-03-15");
-    await sheet.getByRole("button", { name: "Save draft" }).click(); await a.getByText("2026/2027 is saved as a draft.").waitFor();
-    await a.getByRole("table", { name: /Sessions/ }).getByText("Draft").waitFor();
-  });
-  await step(a, "Negative - the same session name again is refused", async () => {
-    await a.getByRole("button", { name: "New session" }).first().click();
-    await sheet.getByLabel("Session name").fill("2026/2027"); await dates();
-    await sheet.getByRole("button", { name: "Save draft" }).click(); await sheet.getByText(/There is already a 2026\/2027 session/).first().waitFor();
-  });
-  await step(a, "Negative - a session whose dates overlap 2026/2027 is refused", async () => {
-    await sheet.getByLabel("Session name").fill("2027/2028");
-    await sheet.getByRole("button", { name: "Save draft" }).click(); await sheet.getByText(/These dates overlap 2026\/2027/).first().waitFor();
     await sheet.getByRole("button", { name: "Cancel" }).click();
   });
-  await step(a, "Make 2026/2027 active", async () => {
-    await a.getByRole("button", { name: "Make 2026/2027 active" }).click();
-    await a.getByRole("dialog").getByRole("button", { name: "Make active" }).click();
-    await a.getByText("2026/2027 is now the active session.").waitFor();
+  if (!s2026) await step(a, "2026/2027 with two semesters and a registration window saved as a draft", async () => {
+    await openNew(); await sheet.getByLabel("Session name").fill("2026/2027"); await dates(2026);
+    await sheet.getByRole("button", { name: "Save draft" }).click(); await a.getByText("2026/2027 is saved as a draft.").waitFor();
+    s2026 = (await W("/academic/sessions")).body.items.find((x) => x.name === "2026/2027");
   });
-  await step(a, "Checklist: step 1 done with its summary", async () => {
-    await checklist(a); await expectDone(a, 1);
-    await steps(a).nth(0).getByText(/2026\/2027 · 2 semesters/).waitFor();
+  await step(a, "Negative - the same name again is refused (nothing created)", async () => {
+    await openNew(); await sheet.getByLabel("Session name").fill("2026/2027"); await dates(2040);
+    await sheet.getByRole("button", { name: "Save draft" }).click(); await sheet.getByText(/There is already a 2026\/2027 session/).first().waitFor();
   });
+  await step(a, "Negative - dates that overlap 2026/2027 are refused (nothing created)", async () => {
+    await sheet.getByLabel("Session name").fill("2039/2040"); await dates(2026);
+    await sheet.getByRole("button", { name: "Save draft" }).click(); await sheet.getByText(/These dates overlap/).first().waitFor();
+    await sheet.getByRole("button", { name: "Cancel" }).click();
+    const names = (await W("/academic/sessions")).body.items.map((x) => x.name);
+    if (names.some((x) => ["2039/2040", "2040/2041"].includes(x))) throw new Error(`a refused session was saved: ${names.join(", ")}`);
+  });
+  await step(a, "2026/2027 is the active session", async () => {
+    if (s2026.status !== "ACTIVE") {
+      await a.getByRole("button", { name: "Make 2026/2027 active" }).click();
+      await a.getByRole("dialog").getByRole("button", { name: "Make active" }).click(); await a.getByText("2026/2027 is now the active session.").waitFor();
+    }
+    await a.getByRole("table", { name: /Sessions/ }).getByRole("row").filter({ hasText: "2026/2027" }).getByText("Active").waitFor();
+  });
+  await step(a, "Checklist: step 1 done", async () => { await checklist(a); await expectDone(a, 1); });
 });
 
+// ================================================================== E · structure
 await group("E", "Academic structure (W-12, W-12c)", async () => {
-  await step(a, "Faculty of Science → Computer Science → B.Sc. Computer Science", async () => {
-    await a.goto(`${UNI}/staff/academic-setup/structure`, { waitUntil: "networkidle" });
-    await a.getByRole("button", { name: "Add faculty" }).first().click();
-    let dlg = a.getByRole("dialog", { name: "Add a faculty" });
-    await dlg.getByLabel("Name").fill("Faculty of Science"); await dlg.getByLabel("Code").fill("SCI");
-    await dlg.getByRole("button", { name: "Add faculty" }).click();
-    await a.getByRole("heading", { name: "Faculty of Science", level: 2 }).waitFor();
-    await a.getByRole("button", { name: "Add department" }).click();
-    dlg = a.getByRole("dialog", { name: "Add a department" });
-    await dlg.getByLabel("Name").fill("Computer Science"); await dlg.getByLabel("Code").fill("CSC");
-    await dlg.getByRole("button", { name: "Add department" }).click();
-    await a.getByRole("heading", { name: "Computer Science", level: 2 }).waitFor();
-    await a.getByRole("button", { name: "Add programme" }).click();
-    dlg = a.getByRole("dialog", { name: "Add a programme" });
-    await dlg.getByLabel("Name").fill("B.Sc. Computer Science"); await dlg.getByLabel("Code").fill("BSC-CSC");
-    await dlg.getByRole("button", { name: "Add programme" }).click();
-    await a.getByRole("heading", { name: "B.Sc. Computer Science", level: 2 }).waitFor();
-    await a.getByText("4 years · 8 semesters").waitFor();
+  await asAdmin();
+  const go = (sel) => a.goto(`${UNI}/staff/academic-setup/structure${sel ? `?sel=${sel}` : ""}`, { waitUntil: "networkidle" });
+  await step(a, "Faculty of Science → Computer Science → B.Sc. Computer Science (created only if missing)", async () => {
+    await go(); let st = await programmeCodes(); let { f, d, pr } = findIn(st, { fac: SCI, dep: CSC, prog: BSC });
+    if (!f) f = findIn(st, { fac: SCI }).f;
+    if (!f) {
+      await a.getByRole("button", { name: "Add faculty" }).first().click(); const dlg = a.getByRole("dialog", { name: "Add a faculty" }); await dialogOk(a, "Add a faculty");
+      await dlg.getByLabel("Name").fill("Faculty of Science"); await dlg.getByLabel("Code").fill("SCI"); await dlg.getByRole("button", { name: "Add faculty" }).click();
+      await a.getByRole("heading", { name: "Faculty of Science", level: 2 }).waitFor(); st = await programmeCodes(); f = findIn(st, { fac: SCI }).f;
+    }
+    if (!d) d = findIn(st, { fac: SCI, dep: CSC }).d;
+    if (!d) {
+      await go(`faculty:${f.id}`); await a.getByRole("button", { name: "Add department" }).click(); const dlg = a.getByRole("dialog", { name: "Add a department" }); await dialogOk(a, "Add a department");
+      await dlg.getByLabel("Name").fill("Computer Science"); await dlg.getByLabel("Code").fill("CSC"); await dlg.getByRole("button", { name: "Add department" }).click();
+      await a.getByRole("heading", { name: "Computer Science", level: 2 }).waitFor(); st = await programmeCodes(); d = findIn(st, { fac: SCI, dep: CSC }).d;
+    }
+    if (!pr) {
+      await go(`department:${d.id}`); await a.getByRole("button", { name: "Add programme" }).click(); const dlg = a.getByRole("dialog", { name: "Add a programme" }); await dialogOk(a, "Add a programme");
+      await dlg.getByLabel("Name").fill("B.Sc. Computer Science"); await dlg.getByLabel("Code").fill("BSC-CSC"); await dlg.getByRole("button", { name: "Add programme" }).click();
+      st = await programmeCodes(); pr = findIn(st, { fac: SCI, dep: CSC, prog: BSC }).pr;
+    }
+    found.sci = f; await go(`programme:${pr.id}`);
+    await a.getByRole("heading", { name: "B.Sc. Computer Science", level: 2 }).waitFor(); await a.getByText(/\d years · \d+ semesters/).first().waitFor();
   });
-  await step(a, "Negative - a faculty code already used is refused", async () => {
-    await a.getByRole("button", { name: "Add faculty" }).first().click();
-    const dlg = a.getByRole("dialog", { name: "Add a faculty" });
-    await dlg.getByLabel("Name").fill("Faculty of Sciences"); await dlg.getByLabel("Code").fill("SCI");
-    await dlg.getByRole("button", { name: "Add faculty" }).click(); await dlg.getByText("SCI is already used by Faculty of Science.").first().waitFor();
+  await step(a, "Negative - a faculty code already in use is refused (nothing created)", async () => {
+    await a.getByRole("button", { name: "Add faculty" }).first().click(); const dlg = a.getByRole("dialog", { name: "Add a faculty" });
+    await dlg.getByLabel("Name").fill("Faculty of Sciences"); await dlg.getByLabel("Code").fill(found.sci.code);
+    await dlg.getByRole("button", { name: "Add faculty" }).click(); await dlg.getByText(new RegExp(`${found.sci.code} is already used by`)).first().waitFor();
     await dlg.getByRole("button", { name: "Cancel" }).click();
   });
   const imp = a.getByRole("dialog", { name: "Import faculties, departments and programmes" });
-  await step(a, "Structure CSV with a bad row: the row is reported and nothing is saved yet", async () => {
-    await a.getByRole("button", { name: "Import from CSV" }).click();
-    await imp.getByLabel("Choose a CSV file").setInputFiles(csvFile("lakeshore_structure.csv", [
+  let accNew = false;
+  await step(a, "Structure CSV with a bad row (duration 9): the row is reported and nothing is saved yet", async () => {
+    accNew = !found.acc;
+    await a.getByRole("button", { name: "Import from CSV" }).click(); await dialogOk(a, "Import faculties, departments and programmes");
+    await imp.getByLabel("Choose a CSV file").setInputFiles(csvFile(`wesley_structure_${RUN}.csv`, [
       "faculty_name,faculty_code,department_name,department_code,programme_name,programme_code,degree,duration_years,entry_levels",
       "Faculty of Management Sciences,MGT,Accounting,ACC,B.Sc. Accounting,BSC-ACC,B.Sc.,4,100;200",
       "Faculty of Management Sciences,MGT,Business Administration,BUS,B.Sc. Business Administration,BSC-BUS,B.Sc.,9,100",
     ]));
-    await imp.getByText("1 row needs fixing").waitFor(); await imp.getByText(/^Row 3: .*duration/i).waitFor();
-    const tree = await a.getByRole("tree").innerText();
-    if (tree.includes("Management")) throw new Error("the tree already shows the file's faculty before confirming");
+    await imp.getByText(accNew ? "1 row needs fixing" : "2 rows need fixing").waitFor(); await imp.getByText(/^Row 3: .*duration/i).waitFor();
+    const st = await programmeCodes(); if (findIn(st, { fac: { codes: [], names: /./ }, dep: { codes: [], names: /./ }, prog: { codes: ["BSC-BUS"], names: /^B\.Sc\. Business Administration$/ } }).pr) throw new Error("the bad row was saved");
+    if (accNew && found.acc) throw new Error("B.Sc. Accounting was saved before confirming");
   });
-  await step(a, "Import the rest: only the good row is added", async () => {
-    await imp.getByRole("button", { name: "Import the rest" }).click();
-    await imp.getByText("Added 1 faculty, 1 department and 1 programme.").waitFor();
-    await imp.getByRole("button", { name: "Done" }).click();
-    await a.getByRole("tree").getByText("Faculty of Management Sciences").waitFor();
-    if ((await a.getByRole("tree").innerText()).includes("Business Administration")) throw new Error("the bad row was imported");
+  await step(a, accNew ? "Import the rest: only the good row is added" : "Every good row is already there: cancel, nothing changes", async () => {
+    if (accNew) {
+      await imp.getByRole("button", { name: "Import the rest" }).click(); await imp.getByText("Added 1 faculty, 1 department and 1 programme.").waitFor();
+      await imp.getByRole("button", { name: "Done" }).click(); await a.getByRole("tree").getByText("Faculty of Management Sciences").waitFor();
+    } else await imp.getByRole("button", { name: "Cancel" }).click();
+    await programmeCodes(); if (!found.acc) throw new Error("no B.Sc. Accounting programme");
   });
   await step(a, "Checklist: step 2 done", async () => { await checklist(a); await expectDone(a, 1, 2); });
 });
 
+// ================================================================== F · courses
 await group("F", "Course catalogue (W-13, W-13b, W-13c)", async () => {
-  await step(a, "Add CSC 201 · Data Structures (3 units, 200L, first semester), typed as csc201", async () => {
-    await a.goto(`${UNI}/staff/courses`);
-    await a.getByRole("button", { name: "Add course" }).first().click();
-    const dlg = a.getByRole("dialog", { name: "Add a course" });
-    await dlg.getByLabel("Code").fill("csc201"); await dlg.getByLabel("Units").fill("3"); await dlg.getByLabel("Title").fill("Data Structures");
+  await asAdmin();
+  if (!found.csc) { await onWesley(); await programmeCodes(); }
+  const addCourse = async (codeTyped, title) => {
+    await a.getByRole("button", { name: "Add course" }).first().click(); const dlg = a.getByRole("dialog", { name: "Add a course" }); await dialogOk(a, "Add a course");
+    await dlg.getByLabel("Code").fill(codeTyped); await dlg.getByLabel("Units").fill("3"); await dlg.getByLabel("Title").fill(title);
     await dlg.getByLabel("Level").selectOption("200"); await dlg.getByLabel("Semester").selectOption("1");
     await dlg.getByRole("button", { name: "Offered to" }).click(); await dlg.getByLabel(/^B\.Sc\. Computer Science/).check();
-    await dlg.getByRole("button", { name: "Add course" }).click();
-    await a.getByText("Added CSC 201 · Data Structures.").waitFor();
+    await dlg.getByRole("button", { name: "Add course" }).click(); return dlg;
+  };
+  await step(a, "CSC 201 · Data Structures (3 units, 200L, first semester) is in the catalogue (added as csc201 if missing)", async () => {
+    await a.goto(`${UNI}/staff/courses`); await a.getByRole("heading", { name: "Course catalogue" }).first().waitFor();
+    if (!(await courseExists("CSC 201"))) { await addCourse("csc201", "Data Structures"); await a.getByText("Added CSC 201 · Data Structures.").waitFor(); }
+    const c201 = await courseExists("CSC 201"); if (c201.units !== 3 || c201.level !== 200 || c201.semester !== 1) throw new Error(`CSC 201 is ${c201.units} units, ${c201.level}L, semester ${c201.semester}`);
   });
-  await step(a, "Negative - CSC 201 a second time is refused", async () => {
-    await a.getByRole("button", { name: "Add course" }).first().click();
-    const dlg = a.getByRole("dialog", { name: "Add a course" });
-    await dlg.getByLabel("Code").fill("CSC 201"); await dlg.getByLabel("Units").fill("2"); await dlg.getByLabel("Title").fill("Data Structures again");
-    await dlg.getByLabel("Level").selectOption("200"); await dlg.getByLabel("Semester").selectOption("1");
-    await dlg.getByRole("button", { name: "Offered to" }).click(); await dlg.getByLabel(/^B\.Sc\. Computer Science/).check();
-    await dlg.getByRole("button", { name: "Add course" }).click();
-    await dlg.getByText(/CSC 201 is already in the catalogue/).first().waitFor();
-    await dlg.getByRole("button", { name: "Cancel" }).click();
+  await step(a, "Negative - CSC 201 a second time is refused (nothing created)", async () => {
+    const dlg = await addCourse("CSC 201", "Data Structures again");
+    await dlg.getByText(/CSC 201 is already in the catalogue/).first().waitFor(); await dlg.getByRole("button", { name: "Cancel" }).click();
   });
   const imp = a.getByRole("dialog", { name: "Import the course catalogue" });
+  let fresh = 0;
   await step(a, "Catalogue CSV with an unknown programme: the row is reported, nothing saved yet", async () => {
-    await a.getByRole("button", { name: "Import CSV" }).click();
-    await imp.getByLabel("Choose a CSV file").setInputFiles(csvFile("lakeshore_catalogue.csv", [
-      "code,title,units,level,semester,programme_code,kind",
-      "CSC 202,Operating Systems,3,200,2,BSC-CSC,core",
-      "ACC 201,Financial Accounting,3,200,1,BSC-ACC,core",
-      "CSC 203,Computer Networks,3,200,1,BSC-XYZ,core",
-    ]));
-    await imp.getByText("1 row needs fixing").waitFor(); await imp.getByText(/^Row 4: .*BSC-XYZ/).waitFor();
-    const r = await apiGet(a, "/api/v1/academic/courses?search=CSC%20202");
-    if (r.body?.total !== 0) throw new Error(`CSC 202 is already saved before confirming (${JSON.stringify(r.body?.total)})`);
+    const want = [["CSC 202", `CSC 202,Operating Systems,3,200,2,${found.csc},core`], ["ACC 201", `ACC 201,Financial Accounting,3,200,1,${found.acc},core`]];
+    const missingNow = [];
+    for (const [cc] of want) if (!(await courseExists(cc))) missingNow.push(cc);
+    fresh = missingNow.length;
+    await a.getByRole("button", { name: "Import CSV" }).click(); await dialogOk(a, "Import the course catalogue");
+    await imp.getByLabel("Choose a CSV file").setInputFiles(csvFile(`wesley_catalogue_${RUN}.csv`, ["code,title,units,level,semester,programme_code,kind", ...want.map((w) => w[1]), "CSC 299,Special Topics,3,200,1,BSC-XYZ,core"]));
+    const bad = 1 + (2 - fresh);
+    await imp.getByText(bad === 1 ? "1 row needs fixing" : `${bad} rows need fixing`).waitFor(); await imp.getByText(/BSC-XYZ/).first().waitFor();
+    for (const cc of missingNow) if (await courseExists(cc)) throw new Error(`${cc} was saved before confirming`);
   });
-  await step(a, "Import the rest: two courses added, the bad one not", async () => {
-    await imp.getByRole("button", { name: "Import the rest" }).click();
-    await imp.getByText("Added 2 courses to the catalogue.").waitFor(); await imp.getByRole("button", { name: "Done" }).click();
-    await a.getByText("ACC 201").first().waitFor();
-    if (await a.getByText("CSC 203").count()) throw new Error("the bad row was imported");
+  await step(a, "Confirm the good rows (or cancel when they are already there); the bad one is never added", async () => {
+    if (fresh) { await imp.getByRole("button", { name: "Import the rest" }).click(); await imp.getByText(`Added ${fresh} course${fresh === 1 ? "" : "s"} to the catalogue.`).waitFor(); await imp.getByRole("button", { name: "Done" }).click(); }
+    else await imp.getByRole("button", { name: "Cancel" }).click();
+    if (await courseExists("CSC 299")) throw new Error("the bad row was imported");
+    if (!(await courseExists("ACC 201")) || !(await courseExists("CSC 202"))) throw new Error("CSC 202 or ACC 201 is missing");
   });
-  await step(a, "Checklist: step 3 done", async () => { await checklist(a); await expectDone(a, 1, 2, 3); });
 });
 
+// ================================================================== G · centres
 await group("G", "Study centres and rooms (W-14, W-14c, W-14d)", async () => {
-  await step(a, "Add Akure Study Centre (AKR, Ondo, phone)", async () => {
-    await a.goto(`${UNI}/staff/centres`);
-    await a.getByRole("button", { name: "Add centre" }).first().click();
-    const dlg = a.getByRole("dialog", { name: "Add a study centre" });
-    await dlg.getByLabel("Centre name").fill("Akure Study Centre"); await dlg.getByLabel("Code").fill("AKR");
-    await dlg.getByLabel("State").selectOption("Ondo"); await dlg.getByLabel(/Phone students can call/).fill("0803 555 0117");
-    await dlg.getByRole("button", { name: "Add centre" }).click();
-    await a.getByRole("dialog", { name: "Akure Study Centre" }).getByText("No rooms yet").waitFor();
-  });
-  await step(a, "Negative - a room with more computers than seats is refused", async () => {
-    await a.getByRole("dialog", { name: "Akure Study Centre" }).getByRole("button", { name: "Add room" }).click();
-    const dlg = a.getByRole("dialog", { name: "Add a room" });
-    await dlg.getByLabel("Room name").fill("Room 1"); await dlg.getByLabel("Seats").fill("30"); await dlg.getByLabel("Computers").fill("40");
-    await dlg.getByRole("button", { name: "Add room" }).click(); await dlg.getByText("A room cannot have more computers than seats.").waitFor();
-  });
-  await step(a, "Room 1 with 30 seats and 30 computers", async () => {
-    const dlg = a.getByRole("dialog", { name: "Add a room" });
-    await dlg.getByLabel("Computers").fill("30"); await dlg.getByRole("button", { name: "Add room" }).click();
-    const profile = a.getByRole("dialog", { name: "Akure Study Centre" });
-    await profile.getByText("30 seats · 30 computers · exam use").waitFor(); await profile.getByRole("button", { name: "Cancel" }).click();
-  });
-  await step(a, "Checklist: step 4 done, import of students unlocked", async () => {
-    await checklist(a); await expectDone(a, 1, 2, 3, 4);
-    if (/Locked/.test(await steps(a).nth(7).innerText())) throw new Error("step 8 is still locked");
-  });
-});
-
-await group("H", "People & roles (W-15, W-15b, W-15c)", async () => {
-  const dlg = a.getByRole("dialog", { name: "Invite a staff member" });
-  await step(a, "Negative - an address outside lakeshore.test is refused", async () => {
-    await a.goto(`${UNI}/staff/people`);
-    await a.getByRole("button", { name: "Invite staff" }).first().click();
-    await dlg.getByLabel("Full name").fill(BELLO.name); await dlg.getByLabel("University email").fill("f.bello@gmail.com");
-    await dlg.getByRole("button", { name: "Lecturer", exact: true }).click();
-    await pick(dlg.getByLabel("Department", { exact: true }), /Computer Science · Faculty of Science/);
-    await dlg.getByRole("button", { name: "Send invite" }).click(); await dlg.getByText(`Use an @${DOMAIN} address`).first().waitFor();
-  });
-  await step(a, "Invite Dr Funmi Bello, lecturer in Computer Science", async () => {
-    await dlg.getByLabel("University email").fill(BELLO.email); await dlg.getByRole("button", { name: "Send invite" }).click();
-    await a.getByText(`Invited ${BELLO.name}.`).waitFor();
-  });
-  await step(a, "Invite Mrs Bisi Ade, coordinator of the Akure centre", async () => {
-    await a.getByRole("button", { name: "Invite staff" }).first().click();
-    await dlg.getByLabel("Full name").fill(ADE.name); await dlg.getByLabel("University email").fill(ADE.email);
-    await dlg.getByRole("button", { name: "Centre coordinator", exact: true }).click();
-    await pick(dlg.getByLabel("Study centre"), /Akure Study Centre/);
-    await dlg.getByRole("button", { name: "Send invite" }).click(); await a.getByText(`Invited ${ADE.name}.`).waitFor();
-  });
-  await step(a, "Their invitations are in the email log, with Lakeshore's sign-in link", async () => {
-    for (const p of [BELLO, ADE]) {
-      const m = await waitEmail(p.email, Date.now() - 300_000, (e) => /invited/i.test(e.subject));
-      if (!m.body.includes(`${UNI}/staff`)) throw new Error(`${p.email}'s invitation has no link to ${UNI}/staff`);
+  await asAdmin();
+  let akr = null;
+  const sheet = () => a.getByRole("dialog", { name: akr.name });
+  await step(a, "Akure Study Centre (AKR, Ondo) is there (added if missing)", async () => {
+    await a.goto(`${UNI}/staff/centres`); await a.getByRole("heading", { name: /centres/i }).first().waitFor();
+    akr = (await W("/academic/centres")).body.items.find((x) => x.code === "AKR") ?? null;
+    if (!akr) {
+      await a.getByRole("button", { name: "Add centre" }).first().click(); const dlg = a.getByRole("dialog", { name: "Add a study centre" }); await dialogOk(a, "Add a study centre");
+      await dlg.getByLabel("Centre name").fill("Akure Study Centre"); await dlg.getByLabel("Code").fill("AKR");
+      await dlg.getByLabel("State").selectOption("Ondo"); await dlg.getByLabel(/Phone students can call/).fill("0803 555 0117");
+      await dlg.getByRole("button", { name: "Add centre" }).click(); await a.keyboard.press("Escape");
+      akr = (await W("/academic/centres")).body.items.find((x) => x.code === "AKR");
     }
+    found.akr = akr;
   });
-  const bulk = a.getByRole("dialog", { name: "Invite staff from a CSV file" });
-  await step(a, "Bulk invite CSV: unknown role, an existing email and a wrong domain are reported, nothing sent yet", async () => {
-    await a.getByRole("button", { name: "Bulk invite (CSV)" }).click();
-    await bulk.getByLabel("Choose a CSV file").setInputFiles(csvFile("lakeshore_staff.csv", [
-      "full_name,email,role,scope_type,scope_code",
-      `Dr Kemi Ola,k.ola@${DOMAIN},Lecturer,UNIVERSITY,`,
-      `Mr Tunde Ojo,t.ojo@${DOMAIN},Wizard,UNIVERSITY,`,
-      `Dr Funmi Bello,${BELLO.email},Lecturer,UNIVERSITY,`,
-      "Mrs Yemi Ade,yemi.ade@gmail.com,Facilitator,UNIVERSITY,",
-    ]));
-    await bulk.getByText("3 rows need fixing").waitFor();
-    if ((await apiGet(a, "/api/v1/people?search=Kemi")).body?.total !== 0) throw new Error("Kemi Ola was invited before confirming");
+  await step(a, "Its profile has Room 1 (30 seats, 30 computers; added if missing)", async () => {
+    await a.goto(`${UNI}/staff/centres?centre=${akr.id}`); await sheet().waitFor(); await dialogOk(a, akr.name);
+    const det = (await W(`/academic/centres/${akr.id}`)).body;
+    if (!(det.roomsList ?? []).some((r) => r.name === "Room 1")) {
+      await sheet().getByRole("button", { name: "Add room" }).click(); const dlg = a.getByRole("dialog", { name: "Add a room" }); await dialogOk(a, "Add a room");
+      await dlg.getByLabel("Room name").fill("Room 1"); await dlg.getByLabel("Seats").fill("30"); await dlg.getByLabel("Computers").fill("30");
+      await dlg.getByRole("button", { name: "Add room" }).click();
+    }
+    await sheet().getByText(/30 seats · 30 computers/).first().waitFor();
   });
-  await step(a, "Confirm: the good row is invited", async () => {
-    await bulk.getByRole("button", { name: "Import the rest" }).click(); await bulk.getByText(/Invited 1 person/).waitFor();
-    await bulk.getByRole("button", { name: "Done" }).click();
-    await a.getByRole("button", { name: "Dr Kemi Ola" }).first().waitFor();
+  await step(a, "Negative - a room with more computers than seats is refused (nothing created)", async () => {
+    const before = (await W(`/academic/centres/${akr.id}`)).body.roomsList.length;
+    await sheet().getByRole("button", { name: "Add room" }).click(); const dlg = a.getByRole("dialog", { name: "Add a room" });
+    await dlg.getByLabel("Room name").fill("Room 2"); await dlg.getByLabel("Seats").fill("30"); await dlg.getByLabel("Computers").fill("40");
+    await dlg.getByRole("button", { name: "Add room" }).click(); await dlg.getByText("A room cannot have more computers than seats.").waitFor();
+    await dlg.getByRole("button", { name: "Cancel" }).click();
+    if ((await W(`/academic/centres/${akr.id}`)).body.roomsList.length !== before) throw new Error("the refused room was saved");
+    await a.keyboard.press("Escape");
   });
-  await step(a, "Checklist: step 5 done (a lecturer is invited)", async () => { await checklist(a); await expectDone(a, 5); });
+  await step(a, "Checklist: step 4 done, student import unlocked", async () => {
+    await checklist(a); await expectDone(a, 4); if (/Locked/.test(await steps(a).nth(7).innerText())) throw new Error("step 8 is still locked");
+  });
 });
 
-await group("I", "Staffing (W-16, W-16b, W-16c)", async () => {
-  const tab = (re) => a.getByRole("link", { name: re });
-  async function assign(course, who) {
-    await a.getByRole("button", { name: `Assign staff for ${course}` }).click();
-    const dlg = a.getByRole("dialog", { name: new RegExp(`Who teaches ${course}`) });
-    await pick(dlg.getByLabel("Lecturer"), who); await dlg.getByRole("button", { name: "Save" }).click();
-    await a.getByText(`Saved who teaches ${course}.`).waitFor();
+// ================================================================== H · people
+await group("H", "People & roles (W-15, W-15b, W-15c); staff email is held by the dev allow-list", async () => {
+  await asAdmin();
+  const dlg = a.getByRole("dialog", { name: "Invite a staff member" });
+  const person = async (email) => ((await W(`/people?search=${enc(email)}`)).body.items ?? []).find((x) => x.email.toLowerCase() === email) ?? null;
+  async function invite(pp, role, scopeLabel, option) {
+    await a.getByRole("button", { name: "Invite staff" }).first().click(); await dialogOk(a, "Invite a staff member");
+    await dlg.getByLabel("Full name").fill(pp.name); await dlg.getByLabel("University email").fill(pp.email);
+    await dlg.getByRole("button", { name: role, exact: true }).click(); await pick(dlg.getByLabel(scopeLabel, { exact: true }), option);
+    await dlg.getByRole("button", { name: "Send invite" }).click();
   }
-  await step(a, "Before any import: the banner, and 3 courses still need a lecturer", async () => {
-    await a.goto(`${UNI}/staff/academic-setup/staffing`);
-    await a.getByText(/No students imported yet for 2026\/2027/).waitFor(); await tab(/^Courses \(3 need a lecturer\)/).waitFor();
-    if (!/3 courses still need a lecturer/.test(await (await checklistText()))) throw new Error("the checklist does not say 3 courses still need a lecturer");
+  await step(a, "Negative - a Gmail address is refused: staff use @wesleyuni.edu.ng (only the error shows, not the hint too)", async () => {
+    await a.goto(`${UNI}/staff/people`); await a.getByRole("heading", { name: "People & roles" }).first().waitFor();
+    await invite({ name: "Dr Funmi Bello", email: "f.bello@gmail.com" }, "Lecturer", "Department", /Computer Science/);
+    await dlg.getByText(`Use an @${DOMAIN} address`).first().waitFor();
+    if (await dlg.getByText(`Must end in @${DOMAIN}`).count()) throw new Error("the hint still shows under the error");
+    await dlg.getByRole("button", { name: "Cancel" }).click();
   });
-  await step(a, "Dr Bello on CSC 201: 2 left", async () => { await assign("CSC 201", /Bello/); await tab(/^Courses \(2 need a lecturer\)/).waitFor(); });
-  await step(a, "Dr Kemi Ola on CSC 202 and ACC 201: none left", async () => {
-    await assign("CSC 202", /Kemi Ola/); await assign("ACC 201", /Kemi Ola/); await tab(/^Courses \(0 need a lecturer\)/).waitFor();
+  for (const [pp, role, scopeLabel, option] of [[BELLO, "Lecturer", "Department", /Computer Science/], [ADE, "Centre coordinator", "Study centre", /Akure/]]) {
+    await step(a, `${pp.name} is on People & roles (invited if missing; the email is recorded, not sent)`, async () => {
+      if (!(await person(pp.email))) {
+        const t0 = Date.now(); await invite(pp, role, scopeLabel, option); await a.getByText(`Invited ${pp.name}.`).waitFor();
+        const m = await waitEmail(pp.email, t0, (e) => /invited/i.test(e.subject));
+        if (m.status !== "SKIPPED") throw new Error(`the invitation to ${pp.email} was ${m.status}: the dev allow-list should hold it`);
+      }
+      await a.goto(`${UNI}/staff/people?search=${enc(pp.email)}`); await a.getByRole("button", { name: pp.name }).first().waitFor();
+    });
+  }
+  const bulk = a.getByRole("dialog", { name: "Invite staff from a CSV file" });
+  let kemiNew = false;
+  await step(a, "Bulk invite CSV: unknown role, an existing email and a Gmail address are reported, nothing sent yet", async () => {
+    kemiNew = !(await person(KEMI.email));
+    await a.getByRole("button", { name: "Bulk invite (CSV)" }).click(); await dialogOk(a, "Invite staff from a CSV file");
+    await bulk.getByLabel("Choose a CSV file").setInputFiles(csvFile(`wesley_staff_${RUN}.csv`, [
+      "full_name,email,role,scope_type,scope_code", `${KEMI.name},${KEMI.email},Lecturer,UNIVERSITY,`, `Mr Tunde Ojo,t.ojo@${DOMAIN},Wizard,UNIVERSITY,`,
+      `${BELLO.name},${BELLO.email},Lecturer,UNIVERSITY,`, "Mrs Yemi Ade,yemi.ade@gmail.com,Facilitator,UNIVERSITY,",
+    ]));
+    await bulk.getByText(kemiNew ? "3 rows need fixing" : "4 rows need fixing").waitFor();
+    if (kemiNew && (await person(KEMI.email))) throw new Error("Kemi Ola was invited before confirming");
+    if (await person(`t.ojo@${DOMAIN}`)) throw new Error("the unknown-role row was saved");
   });
-  await step(a, "Mrs Ade is the Akure coordinator", async () => {
-    await tab(/^Centres \(/).click();
-    await a.getByRole("button", { name: "Assign coordinator for Akure Study Centre" }).click();
-    const dlg = a.getByRole("dialog", { name: "Coordinator for Akure Study Centre" });
-    await pick(dlg.getByLabel("Coordinator"), /Bisi Ade/); await dlg.getByRole("button", { name: "Save" }).click();
-    await a.getByText("Saved the coordinator for Akure Study Centre.").waitFor();
+  await step(a, kemiNew ? "Confirm: the good row (Dr Kemi Ola) is invited" : "Dr Kemi Ola is already here: cancel, nothing sent", async () => {
+    if (kemiNew) { await bulk.getByRole("button", { name: "Import the rest" }).click(); await bulk.getByText(/Invited 1 person/).waitFor(); await bulk.getByRole("button", { name: "Done" }).click(); }
+    else await bulk.getByRole("button", { name: "Cancel" }).click();
+    if (!(await person(KEMI.email))) throw new Error("Kemi Ola is missing");
   });
-  await step(a, "Checklist: step 6 done", async () => { await checklist(a); await expectDone(a, 6); });
 });
-async function checklistText() {
-  const back = p.url();
-  await p.goto(`${UNI}/staff/setup`); await p.getByText(/of 9 steps complete/).waitFor();
-  const t = await p.getByRole("region", { name: "Setup steps" }).innerText();
-  await p.goto(back); return t;
-}
 
-await group("J", "Grading rules (W-17, W-17b, W-17c, W-17d)", async () => {
-  await step(a, "First visit: the built-in defaults", async () => {
-    await a.goto(`${UNI}/staff/academic-setup/grading`); await a.getByText("These are the built-in default rules").waitFor();
+// ================================================================== I · staffing
+await group("I", "Staffing (W-16, W-16b, W-16c)", async () => {
+  await asAdmin();
+  const need = async () => (await W("/academic/staffing")).body;
+  async function assign(courseCode, whoRe) {
+    const st = await need(); const row = st.courses.find((x) => x.course.code === courseCode);
+    if (!row) throw new Error(`${courseCode} is not on Staffing`);
+    await a.getByRole("button", { name: `${row.needsLecturer ? "Assign" : "Edit"} staff for ${courseCode}` }).click();
+    const dlg = a.getByRole("dialog", { name: new RegExp(`Who teaches ${courseCode}`) }); await dialogOk(a, `Who teaches ${courseCode}`);
+    if (row.lecturer && whoRe.test(row.lecturer.fullName)) { await dlg.getByRole("button", { name: "Cancel" }).click(); return false; }
+    await pick(dlg.getByLabel("Lecturer"), whoRe); await dlg.getByRole("button", { name: "Save" }).click();
+    await a.getByText(`Saved who teaches ${courseCode}.`).waitFor(); return true;
+  }
+  await step(a, "Staffing: the courses tab counts the courses that still need a lecturer, as the checklist does", async () => {
+    await a.goto(`${UNI}/staff/academic-setup/staffing`); const st = await need();
+    await a.getByRole("link", { name: new RegExp(`^Courses \\(${st.needLecturer} need`) }).waitFor();
+    const t = await (async () => { await checklist(a); return steps(a).nth(5).innerText(); })();
+    if (st.needLecturer && !new RegExp(`${st.needLecturer} courses? still needs? a lecturer`).test(t)) throw new Error(`checklist step 6 says: ${t.replace(/\s+/g, " ")}`);
+    await a.goto(`${UNI}/staff/academic-setup/staffing`);
   });
+  await step(a, "Dr Bello lectures CSC 201 (the count drops when he is assigned)", async () => {
+    const before = (await need()).needLecturer; const changed = await assign("CSC 201", /Funmi Bello/);
+    if (changed && (await need()).needLecturer !== before - 1) throw new Error("the count did not drop");
+  });
+  await step(a, "Dr Kemi Ola lectures CSC 202 and ACC 201", async () => { await assign("CSC 202", /Kemi Ola/); await assign("ACC 201", /Kemi Ola/); });
+  await step(a, "Mrs Ade coordinates Akure", async () => {
+    await a.getByRole("link", { name: /^Centres \(/ }).click(); const st = await need();
+    const row = st.centres.find((x) => x.centre.code === "AKR");
+    await a.getByRole("button", { name: `${row.needsCoordinator ? "Assign" : "Edit"} coordinator for ${row.centre.name}` }).click();
+    const dlg = a.getByRole("dialog", { name: `Coordinator for ${row.centre.name}` }); await dialogOk(a, `Coordinator for ${row.centre.name}`);
+    if (row.coordinator && /Bisi Ade/.test(row.coordinator.fullName)) await dlg.getByRole("button", { name: "Cancel" }).click();
+    else { await pick(dlg.getByLabel("Coordinator"), /Bisi Ade/); await dlg.getByRole("button", { name: "Save" }).click(); await a.getByText(`Saved the coordinator for ${row.centre.name}.`).waitFor(); }
+  });
+});
+
+// ================================================================== J · grading
+await group("J", "Grading rules (W-17, W-17b, W-17c, W-17d)", async () => {
+  await asAdmin();
+  const saveBtn = () => a.getByRole("button", { name: /^(Confirm these rules|Save rules)$/ });
+  await step(a, "Grading rules page", async () => { await a.goto(`${UNI}/staff/academic-setup/grading`); await a.getByLabel("Coursework (CA)").waitFor(); });
   await step(a, "Negative - CA 40 / exam 50 is refused (W-17c) and Save is disabled", async () => {
     await a.getByLabel("Coursework (CA)").fill("40"); await a.getByLabel("Exam").fill("50");
     await a.getByText("Must add up to 100").waitFor(); await a.getByText("Fix 1 problem: the weights add up to 90").waitFor();
-    if (await a.getByRole("button", { name: /^(Confirm these rules|Save rules)$/ }).isEnabled()) throw new Error("Save is enabled with 40/50");
-    await a.getByLabel("Coursework (CA)").fill("30"); await a.getByLabel("Exam").fill("70");
+    if (await saveBtn().isEnabled()) throw new Error("Save is enabled with 40/50");
   });
-  await step(a, "Negative - overlapping bands C and D are refused", async () => {
+  await step(a, "Negative - overlapping bands C and D are refused; cancel", async () => {
     await a.getByRole("button", { name: "Edit bands" }).click();
     const cFrom = await a.getByRole("group", { name: "Band C" }).getByLabel("From").inputValue();
-    await a.getByRole("group", { name: "Band D" }).getByLabel("To").fill(String(Number(cFrom) + 2));
-    await a.getByText(/bands C and D overlap/).waitFor();
+    await a.getByRole("group", { name: "Band D" }).getByLabel("To").fill(String(Number(cFrom) + 2)); await a.getByText(/bands C and D overlap/).waitFor();
     if (await a.getByRole("button", { name: "Save bands" }).isEnabled()) throw new Error("Save bands is enabled with overlapping bands");
-    await a.getByRole("button", { name: "Cancel" }).first().click();
+    await a.getByRole("button", { name: "Cancel" }).first().click(); await a.reload(); await a.getByLabel("Coursework (CA)").waitFor();
   });
-  await step(a, "Confirm the default rules", async () => {
-    // After typing 30/70 back the form counts as changed, so the button reads "Save rules".
-    await a.getByRole("button", { name: /^(Confirm these rules|Save rules)$/ }).click(); await a.getByText(/Saved\. Version \d+ applies from/).waitFor();
+  await step(a, "The default rules are confirmed (saved once; 30/70)", async () => {
+    const g = (await W("/academic/grading")).body;
+    if (!g.saved) { await a.getByRole("button", { name: "Confirm these rules" }).click(); await a.getByText(/Saved\. Version \d+ applies from/).waitFor(); }
+    const g2 = (await W("/academic/grading")).body; if (!g2.saved || g2.caWeight + g2.examWeight !== 100) throw new Error("the default rules are not saved");
   });
-  await step(a, "B.Sc. Computer Science gets its own rules (40/60)", async () => {
-    await pick(a.getByLabel("Rules for"), /B\.Sc\. Computer Science/);
-    await a.getByText("B.Sc. Computer Science follows the default rules").waitFor();
+  await step(a, "B.Sc. Computer Science gets its own rules (40/60)…", async () => {
+    await pick(a.getByLabel("Rules for"), /^B\.Sc\. Computer Science$/); await a.getByText(/B\.Sc\. Computer Science (follows the default rules|has its own rules)/).waitFor();
+    if (await a.getByText("B.Sc. Computer Science has its own rules").count()) return;
     await a.getByLabel("Coursework (CA)").fill("40"); await a.getByLabel("Exam").fill("60");
     await a.getByRole("button", { name: "Save rules" }).click(); await a.getByText("B.Sc. Computer Science has its own rules").waitFor();
   });
-  await step(a, "…and uses the default again", async () => {
+  await step(a, "…and follows the default again", async () => {
     await a.getByRole("button", { name: "Use the default again" }).click();
-    await a.getByRole("dialog").getByRole("button", { name: "Use the default" }).click();
-    await a.getByText("B.Sc. Computer Science follows the default rules").waitFor();
+    await a.getByRole("dialog").getByRole("button", { name: "Use the default" }).click(); await a.getByText("B.Sc. Computer Science follows the default rules").waitFor();
   });
-  await step(a, "Checklist: steps 1 to 7 done, 7 of 9", async () => {
-    await checklist(a); await expectDone(a, 1, 2, 3, 4, 5, 6, 7); await a.getByText("7 of 9 steps complete").waitFor();
-  });
+  await step(a, "Checklist: steps 1, 2, 4, 5 and 7 done", async () => { await checklist(a); await expectDone(a, 1, 2, 4, 5, 7); });
 });
 
+// ================================================================== K · staff accounts
 await group("K", "Staff accounts: suspend, restore and reset two-step (W-21)", async () => {
-  await step(b, "Bola signs out; Dr Bello signs in for the first time and sets up two-step", async () => {
-    await leave(); await b.goto(`${UNI}/staff/sign-in`); await google(b, BELLO.email);
-    await b.getByText("1. Scan with your authenticator app").waitFor();
+  await asAdmin();
+  const sheet = a.getByRole("dialog", { name: BELLO.name });
+  async function openBello() { await a.goto(`${UNI}/staff/people?search=${enc(BELLO.email)}`); await a.getByRole("button", { name: BELLO.name }).first().click(); await sheet.getByText(/Active|Invited|Suspended/).first().waitFor(); await dialogOk(a, BELLO.name); }
+  async function belloSetsUp() {
+    await leave(); await b.goto(`${UNI}/staff/sign-in`); await google(b, BELLO.email); await b.getByText("1. Scan with your authenticator app").waitFor();
     belloSecret = (await b.locator("p.font-mono").first().innerText()).replace(/\s/g, "");
     await typeCode(b, await code(belloSecret)); await b.getByRole("button", { name: "Turn on two-step sign-in" }).click();
     await b.getByRole("button", { name: /saved them/ }).click(); await b.waitForURL(/\/staff/); who = "bello";
-  });
-  await step(a, "Dr Bello signs out; Bola signs in with her code and trusts this computer", async () => { await staffIn(ADMIN); });
-  const sheet = a.getByRole("dialog", { name: BELLO.name });
-  async function openBello() { await a.goto(`${UNI}/staff/people`); await a.getByRole("button", { name: BELLO.name }).first().click(); await sheet.getByText(/Active|Suspended/).first().waitFor(); }
+  }
+  const bello = async () => (await W(`/people?search=${enc(BELLO.email)}`)).body.items[0];
+  if (!(await (async () => { await onWesley(); return (await bello()).twoStepSetUp; })())) {
+    await step(b, "Ngozi signs out; Dr Bello signs in for the first time and sets up two-step", belloSetsUp);
+    await asAdmin();
+  }
   await step(a, "Suspend asks for a reason and names the course he lectures", async () => {
-    await openBello(); await sheet.getByText("Active").first().waitFor();
-    await sheet.getByRole("button", { name: `Suspend ${BELLO.name}` }).click();
-    const dlg = a.getByRole("dialog", { name: `Suspend ${BELLO.name}?` });
-    await dlg.getByText(/CSC 201/).first().waitFor();
+    await openBello(); await sheet.getByRole("button", { name: `Suspend ${BELLO.name}` }).click();
+    const dlg = a.getByRole("dialog", { name: `Suspend ${BELLO.name}?` }); await dlg.getByText(/CSC 201/).first().waitFor(); await dialogOk(a, `Suspend ${BELLO.name}?`);
     await dlg.getByRole("button", { name: "Suspend" }).click(); await dlg.getByText("Write why. It is kept in the audit log.").waitFor();
     await dlg.getByLabel("Reason (kept in the audit log)").fill("On leave from 1 Dec"); await dlg.getByRole("button", { name: "Suspend" }).click();
     await a.getByText(`${BELLO.name} is suspended and was signed out everywhere.`).waitFor();
   });
   await step(b, "Negative - suspended: Dr Bello's sign-in is refused", async () => {
-    await leave(); await b.goto(`${UNI}/staff/sign-in`); await google(b, BELLO.email); await b.waitForURL(/error=suspended/);
-    await b.getByText(/suspended/i).first().waitFor();
+    await leave(); await b.goto(`${UNI}/staff/sign-in`); await google(b, BELLO.email); await b.waitForURL(/error=suspended/); await b.getByText(/suspended/i).first().waitFor();
   });
-  await step(a, "Bola signs in again (trusted computer: no code) and restores his access", async () => {
-    await staffIn(ADMIN); await openBello();
-    await sheet.getByRole("button", { name: "Restore access" }).click(); await a.getByText(`${BELLO.name} can sign in again.`).first().waitFor();
+  await asAdmin();
+  await step(a, "Ngozi restores his access", async () => {
+    await openBello(); await sheet.getByRole("button", { name: "Restore access" }).click(); await a.getByText(`${BELLO.name} can sign in again.`).first().waitFor();
   });
+  let t0 = 0;
   await step(a, "Reset his two-step sign-in (reason required)", async () => {
     await sheet.getByRole("button", { name: "Reset two-step sign-in" }).click();
-    const dlg = a.getByRole("dialog", { name: /Reset Dr Funmi Bello’s two-step sign-in/ });
+    const dlg = a.getByRole("dialog", { name: /Reset Dr Funmi Bello’s two-step sign-in/ }); await dialogOk(a, "Reset two-step sign-in");
     await dlg.getByRole("button", { name: "Reset two-step sign-in" }).click(); await dlg.getByText(/Write why/).waitFor();
-    await dlg.getByLabel("Reason (kept in the audit log)").fill("Lost phone"); await dlg.getByRole("button", { name: "Reset two-step sign-in" }).click();
-    await a.getByText(/Reset Dr Funmi Bello’s two-step sign-in/).first().waitFor();
-    await a.keyboard.press("Escape");
+    t0 = Date.now(); await dlg.getByLabel("Reason (kept in the audit log)").fill("Lost phone"); await dlg.getByRole("button", { name: "Reset two-step sign-in" }).click();
+    await a.getByText(/Reset Dr Funmi Bello’s two-step sign-in/).first().waitFor(); await a.keyboard.press("Escape");
   });
-  await step(b, "His next sign-in asks him to set up two-step again (W-04); he was emailed", async () => {
-    await leave(); await b.goto(`${UNI}/staff/sign-in`); await google(b, BELLO.email); await b.getByText("1. Scan with your authenticator app").waitFor();
-    await waitEmail(BELLO.email, Date.now() - 300_000, (e) => /two-step/i.test(e.subject + e.body));
-    belloSecret = (await b.locator("p.font-mono").first().innerText()).replace(/\s/g, "");
-    await typeCode(b, await code(belloSecret)); await b.getByRole("button", { name: "Turn on two-step sign-in" }).click();
-    await b.getByRole("button", { name: /saved them/ }).click(); await b.waitForURL(/\/staff/); who = "bello";
+  await step(b, "His next sign-in asks him to set up two-step again (W-04); his email is recorded, not sent", async () => {
+    const m = await waitEmail(BELLO.email, t0 - 20_000, (e) => /two-step/i.test(e.subject + e.body));
+    if (m.status !== "SKIPPED") throw new Error(`the reset email was ${m.status}`);
+    await belloSetsUp();
   });
 });
 
-// ---- the portal export: 300 students plus 3 bad rows (a duplicate matric, an unknown centre, an unknown programme), one without email
+// ================================================================== L · import
 const FIRST = ["Chidi", "Amaka", "Tunde", "Ngozi", "Emeka", "Halima", "Kunle", "Zainab", "Femi", "Chioma", "Ibrahim", "Yetunde", "Obinna", "Aisha", "Segun"];
 const LAST = ["Okeke", "Adeyemi", "Balogun", "Eze", "Lawal", "Nwosu", "Okonkwo", "Bakare", "Danjuma", "Afolabi", "Uche", "Ogunleye"];
-const HEADER = "matric_number,surname,first_name,other_names,programme_code,level,study_centre,email,phone";
-const PORTAL = [HEADER];
-for (let i = 1; i <= 300; i++) {
-  const m = `LU/ODL/24/${String(i).padStart(4, "0")}`;
-  if (m === ADEOLA.matric) { PORTAL.push(`${m},Okafor,Adeola,,BSC-CSC,200,AKR,${ADEOLA.email},0803 412 4417`); continue; }
-  if (m === NO_EMAIL) { PORTAL.push(`${m},Musa,Ibrahim,,BSC-CSC,200,Akure,,0803 412 0201`); continue; }
-  const f = FIRST[i % FIRST.length], l = LAST[(i * 7) % LAST.length];
-  PORTAL.push(`${m},${l},${f},,${i % 2 ? "BSC-CSC" : "BSC-ACC"},${i % 3 ? 100 : 200},${i % 4 ? "AKR" : "Akure Study Centre"},${f.toLowerCase()}.${l.toLowerCase()}${i}@${DOMAIN},0803 412 ${String(i).padStart(4, "0")}`);
+function portalRows() {
+  const rows = ["matric_number,surname,first_name,other_names,programme_code,level,study_centre,email,phone"];
+  for (let i = 1; i <= 300; i++) {
+    const m = `WU/ODL/24/${String(i).padStart(4, "0")}`;
+    if (m === ADEOLA.matric) { rows.push(`${m},Okafor,Adeola,,${found.csc},200,AKR,${ADEOLA.email},0803 412 4417`); continue; }
+    if (m === NO_EMAIL) { rows.push(`${m},Musa,Ibrahim,,${found.csc},200,Akure,,0803 412 0201`); continue; }
+    const f = FIRST[i % FIRST.length], l = LAST[(i * 7) % LAST.length];
+    rows.push(`${m},${l},${f},,${i % 2 ? found.csc : found.acc},${i % 3 ? 100 : 200},${i % 4 ? "AKR" : "Akure Study Centre"},${f.toLowerCase()}.${l.toLowerCase()}${i}@wesley.test,0803 412 ${String(i).padStart(4, "0")}`);
+  }
+  rows.push(`${P.matric},${P.surname},${P.first},,${found.csc},200,AKR,${P.email},0803 999 ${RUN.padStart(4, "0")}`);
+  rows.push(`WU/ODL/24/0299,Okeke,Chidi,,${found.csc},100,AKR,chidi.copy@wesley.test,`);
+  rows.push(`WU/ODL/24/0301,Bello,Sade,,${found.csc},100,Ikeja,sade.bello@wesley.test,`);
+  rows.push(`WU/ODL/24/0302,Ojo,Kayode,,BSC-XYZ,100,AKR,kayode.ojo@wesley.test,`);
+  return rows;
 }
-PORTAL.push(`LU/ODL/24/0299,Okeke,Chidi,,BSC-CSC,100,AKR,chidi.copy@${DOMAIN},`);
-PORTAL.push(`LU/ODL/24/0301,Bello,Sade,,BSC-CSC,100,Ikeja,sade.bello@${DOMAIN},`);
-PORTAL.push(`LU/ODL/24/0302,Ojo,Kayode,,BSC-XYZ,100,AKR,kayode.ojo@${DOMAIN},`);
-const PORTAL_NAME = "lakeshore_portal_export.csv";
-
-await group("L", "Import students (W-18, W-19, W-18b)", async () => {
-  await step(a, "Dr Bello signs out; Bola signs back in (trusted computer: no code)", async () => { await staffIn(ADMIN); });
-  await step(a, "Import page with the column guide; the CSV template downloads", async () => {
+async function studentByMatric(m) { return ((await W(`/students?q=${enc(m)}&size=5`)).body.items ?? []).find((x) => x.matricNumber === m) ?? null; }
+await group("L", "Import students (W-18, W-19, W-18b): 304 rows, 4 bad; re-importing never duplicates", async () => {
+  await asAdmin();
+  await onWesley(); if (!found.csc || !found.acc) await programmeCodes();
+  const rows = portalRows();
+  await step(a, "Import page; the CSV template downloads", async () => {
     await a.goto(`${UNI}/staff/students/import`, { waitUntil: "networkidle" }); await a.getByRole("heading", { name: "Import admitted students" }).waitFor();
     const [dl] = await Promise.all([a.waitForEvent("download"), a.getByText("Download template").first().click()]);
-    const text = readFileSync(await dl.path()).toString();
-    if (!/matric_number/.test(text.split("\n")[0])) throw new Error(`the template header is ${text.split("\n")[0]}`);
+    const text = readFileSync(await dl.path()).toString(); if (!/matric_number/.test(text.split("\n")[0])) throw new Error(`the template header is ${text.split("\n")[0]}`);
   });
   await step(a, "Negative - an Excel file is refused: save it as CSV", async () => {
     await a.getByLabel("Choose the portal CSV file").setInputFiles({ name: "portal.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from("PK") });
     await a.getByText(/Save it as CSV/).first().waitFor();
   });
-  await step(a, `Upload ${PORTAL.length - 1} rows: W-19 shows 299 ready, 4 errors, 1 warning`, async () => {
-    await a.getByLabel("Choose the portal CSV file").setInputFiles(csvFile(PORTAL_NAME, PORTAL));
-    await a.getByRole("heading", { name: "Check before importing" }).waitFor({ timeout: 60_000 });
-    await a.getByRole("button", { name: "Import 299 valid rows" }).waitFor();
+  await step(a, `W-19: ${rows.length - 1} rows checked: 300 ready, 4 errors (duplicate matric, unknown centre, unknown programme), the no-email warning`, async () => {
+    await a.getByLabel("Choose the portal CSV file").setInputFiles(csvFile(PORTAL_NAME, rows));
+    await a.getByRole("heading", { name: "Check before importing" }).waitFor({ timeout: 60_000 }); await a.getByRole("button", { name: "Import 300 valid rows" }).waitFor();
     const main = await a.locator("main").innerText();
-    for (const re of [/Study centre "Ikeja" not found/, /appears twice in this file/, /Programme code "BSC-XYZ" unknown/, /No email: this student cannot get the welcome/])
-      if (!re.test(main)) throw new Error(`the report does not show ${re}`);
+    for (const re of [/Study centre "Ikeja" not found/, /appears twice in this file/, /Programme code "BSC-XYZ" unknown/, /No email: this student cannot get the welcome/]) if (!re.test(main)) throw new Error(`the report does not show ${re}`);
   });
-  await step(a, "Nothing is saved before confirming", async () => {
-    const r = await apiGet(a, "/api/v1/students?q=Okafor");
-    if (r.status !== 200 || r.body.total !== 0) throw new Error(`students already saved: ${r.status} ${JSON.stringify(r.body?.total)}`);
+  await step(a, `Nothing is saved before confirming (this run's student ${P.matric} is not there yet)`, async () => { if (await studentByMatric(P.matric)) throw new Error(`${P.matric} already exists`); });
+  await step(a, "Confirm: imported, the bad rows skipped", async () => {
+    await a.getByRole("button", { name: "Import 300 valid rows" }).click();
+    await a.getByRole("heading", { name: "Students imported" }).waitFor({ timeout: 60_000 }); await a.getByText(/4 rows skipped/).first().waitFor();
+    if (!(await studentByMatric(P.matric))) throw new Error(`${P.matric} was not created`);
   });
-  await step(a, "Confirm: 299 students imported, the bad rows skipped", async () => {
-    await a.getByRole("button", { name: "Import 299 valid rows" }).click();
-    await a.getByRole("heading", { name: "Students imported" }).waitFor({ timeout: 60_000 }); await a.getByText(/299 new/).first().waitFor();
+  await step(a, "The same file again: every row is unchanged, nothing duplicated (not confirmed)", async () => {
+    await a.goto(`${UNI}/staff/students/import`, { waitUntil: "networkidle" });
+    await a.getByLabel("Choose the portal CSV file").setInputFiles(csvFile(PORTAL_NAME, rows));
+    await a.getByRole("heading", { name: "Check before importing" }).waitFor({ timeout: 60_000 }); await a.getByText(/0 new · 0 updated · 300 unchanged/).first().waitFor();
   });
-  await step(a, "Import history lists the file", async () => {
-    await a.goto(`${UNI}/staff/students/import`); await a.getByRole("button", { name: "Import history" }).click();
+  await step(a, "Import history lists this run's file", async () => {
+    await a.goto(`${UNI}/staff/students/import`); await a.getByRole("button", { name: "Import history" }).click(); await dialogOk(a, "Import history");
     await a.getByRole("dialog", { name: "Import history" }).getByText(PORTAL_NAME).first().waitFor(); await a.keyboard.press("Escape");
   });
-  await step(a, "Checklist: step 8 done, step 9 open", async () => {
-    await checklist(a); await expectDone(a, 8); if (/Locked/.test(await steps(a).nth(8).innerText())) throw new Error("step 9 is still locked");
+  await step(a, "Adeola Okafor's record keeps a .test address (codes for her are never really emailed)", async () => {
+    const r = await studentByMatric(ADEOLA.matric); if (!r?.email?.endsWith(".test")) throw new Error(`Adeola's email is ${r?.email}`);
   });
+  await step(a, "Checklist: step 8 done, step 9 open", async () => { await checklist(a); await expectDone(a, 8); if (/Locked/.test(await steps(a).nth(8).innerText())) throw new Error("step 9 is still locked"); });
 });
 
+// ================================================================== M · add one student
 await group("M", "Add one student (W-22c)", async () => {
+  await asAdmin();
   const dlg = a.getByRole("dialog", { name: "Add a student" });
   async function fill(matric) {
-    await dlg.getByLabel("First name").fill("Grace"); await dlg.getByLabel("Surname").fill("Nwosu");
-    await dlg.getByLabel("Matric number").fill(matric);
+    await a.getByRole("button", { name: "Add a student" }).click(); await dialogOk(a, "Add a student");
+    await dlg.getByLabel("First name").fill(GRACE.first); await dlg.getByLabel("Surname").fill(GRACE.surname); await dlg.getByLabel("Matric number").fill(matric);
     await pick(dlg.getByLabel("Programme and level"), /B\.Sc\. Computer Science · 100L/); await pick(dlg.getByLabel("Study centre"), /Akure/);
-    await dlg.getByLabel("Email (for the welcome email)").fill(`grace.nwosu@${DOMAIN}`);
+    await dlg.getByLabel("Email (for the welcome email)").fill("grace.nwosu@wesley.test");
     const cb = dlg.getByLabel("Send the welcome email now"); if (await cb.isChecked()) await cb.uncheck();
   }
-  await step(a, "Negative - a matric number already on the platform is refused", async () => {
-    await a.goto(`${UNI}/staff/students`); await a.getByRole("button", { name: "Add a student" }).click();
-    await fill(ADEOLA.matric); await dlg.getByRole("button", { name: "Add student" }).click();
-    await dlg.getByText(/already/i).first().waitFor();
+  await step(a, "Negative - a matric number already on the platform is refused (nothing created)", async () => {
+    await a.goto(`${UNI}/staff/students`); await fill(ADEOLA.matric); await dlg.getByRole("button", { name: "Add student" }).click();
+    await dlg.getByText(/already/i).first().waitFor(); await dlg.getByRole("button", { name: "Cancel" }).click();
   });
-  await step(a, "A late admission, Grace Nwosu, is added", async () => {
-    await dlg.getByLabel("Matric number").fill("LU/ODL/24/0400"); await dlg.getByRole("button", { name: "Add student" }).click();
-    await a.getByText("Added Grace Nwosu.").waitFor();
+  await step(a, `Grace Nwosu (${GRACE.matric}), a late admission, is on the list (added if missing)`, async () => {
+    if (!(await studentByMatric(GRACE.matric))) { await fill(GRACE.matric); await dlg.getByRole("button", { name: "Add student" }).click(); await a.getByText("Added Grace Nwosu.").waitFor(); }
+    await a.goto(`${UNI}/staff/students?q=${enc(GRACE.matric)}`); await a.getByRole("button", { name: "Grace Nwosu" }).first().waitFor();
   });
 });
 
+// ================================================================== N · welcome emails
+async function realAddressesNotActivated() {
+  const out = []; let page = 0;
+  for (;;) {
+    const r = (await W(`/students?status=NOT_ACTIVATED&size=200&page=${page}`)).body;
+    for (const x of r.items) if (isAllowedReal(x.email)) out.push(`${x.matricNumber} ${x.email}`);
+    page += 1; if (page * r.size >= r.total || !r.items.length) break;
+  }
+  return out;
+}
+async function sendToAll() {
+  const real = await realAddressesNotActivated();
+  if (real.length) throw new Error(`not sending: these not-activated students have addresses that really get email: ${real.slice(0, 5).join("; ")}`);
+  await a.getByRole("button", { name: /^Send to [\d,]+ students?$/ }).click(); await dialogOk(a, "Send to students?");
+  await a.getByRole("button", { name: "Send now" }).click();
+  const report = a.getByRole("dialog", { name: "Welcome messages sent" }); await report.waitFor({ timeout: 300_000 }); await dialogOk(a, "Welcome messages sent");
+  return report;
+}
 await group("N", "Welcome emails (W-20, W-20d, W-20c)", async () => {
+  await asAdmin();
   const ed = a.getByRole("dialog", { name: "Edit the welcome email" });
-  let saved = "";
+  const MARK = "The Wesley ODeL office is open 8am to 4pm.";
+  let base = "";
   await step(a, "Negative - the wording without {activation_link} is refused", async () => {
     await a.goto(`${UNI}/staff/students/welcome`, { waitUntil: "networkidle" }); await a.getByRole("heading", { name: "Send welcome messages" }).waitFor();
-    await a.getByRole("button", { name: "Edit the wording" }).click();
-    saved = await ed.getByLabel("Welcome email").inputValue();
-    await ed.getByLabel("Welcome email").fill(saved.replaceAll("{activation_link}", ""));
-    await ed.getByRole("button", { name: "Save template" }).click(); await ed.getByText(/activation_link/).first().waitFor();
+    await a.getByRole("button", { name: "Edit the wording" }).click(); await dialogOk(a, "Edit the welcome email");
+    base = (await ed.getByLabel("Welcome email").inputValue()).replace(`\n${MARK}`, "");
+    await ed.getByLabel("Welcome email").fill(base.replaceAll("{activation_link}", "")); await ed.getByRole("button", { name: "Save template" }).click();
+    await ed.getByText(/activation_link/).first().waitFor();
   });
   await step(a, "Negative - an unknown field {foo} is refused", async () => {
-    await ed.getByLabel("Welcome email").fill(saved + "\n{foo}");
-    await ed.getByRole("button", { name: "Save template" }).click(); await ed.getByText(/Unknown field \{foo\}/).first().waitFor();
+    await ed.getByLabel("Welcome email").fill(`${base}\n{foo}`); await ed.getByRole("button", { name: "Save template" }).click(); await ed.getByText(/Unknown field \{foo\}/).first().waitFor();
   });
-  await step(a, "Edited wording saved", async () => {
-    await ed.getByLabel("Welcome email").fill(saved + "\nThe Lakeshore ODeL office is open 8am to 4pm.");
-    await ed.getByRole("button", { name: "Save template" }).click(); await a.getByText(/Saved the welcome email/).waitFor();
+  await step(a, "The edited wording is saved", async () => {
+    await ed.getByLabel("Welcome email").fill(`${base}\n${MARK}`); await ed.getByRole("button", { name: "Save template" }).click(); await a.getByText(/Saved the welcome email/).waitFor();
   });
-  await step(a, "Send a test to me: it reaches Bola's address in the log with the new wording", async () => {
-    const t0 = Date.now();
-    await a.getByRole("button", { name: "Send a test to me" }).click(); await a.getByText(`Sent a test to ${uni.email}.`, { exact: false }).waitFor();
-    const m = await waitEmail(uni.email, t0, (e) => /8am to 4pm/.test(e.body));
-    if (!/activate/.test(m.body)) throw new Error("the test email has no activation link");
+  await step(a, "Send a test to me: in the log for Ngozi with the new wording, held by the dev allow-list", async () => {
+    const t0 = Date.now(); await a.getByRole("button", { name: "Send a test to me" }).click(); await a.getByText(`Sent a test to ${NGOZI.email}.`, { exact: false }).waitFor();
+    const m = await waitEmail(NGOZI.email, t0, (e) => e.body.includes("8am to 4pm"));
+    if (m.status !== "SKIPPED") throw new Error(`the test email was ${m.status}`); if (!/activate/.test(m.body)) throw new Error("no activation link in it");
   });
-  await step(a, "Send to everyone with an email: progress, then the delivery report (W-20c)", async () => {
-    await a.getByRole("button", { name: /^Send to \d+ students?$/ }).click();
-    await a.getByRole("button", { name: "Send now" }).click();
-    const report = a.getByRole("dialog", { name: "Welcome messages sent" });
-    await report.waitFor({ timeout: 240_000 });
+  await step(a, "Send to everyone with an email (after checking none is a real address): progress, then the delivery report (W-20c)", async () => {
+    const report = await sendToAll();
     await report.getByText(/emails delivered/).waitFor(); await report.getByText(/did not get the welcome/).waitFor();
-    await report.getByRole("table", { name: /did not get the welcome/ }).getByText(/Ibrahim Musa|Musa Ibrahim/).waitFor();
+    await report.getByRole("table", { name: /did not get the welcome/ }).getByText(/Ibrahim Musa|Musa Ibrahim/).first().waitFor();
   });
-  await step(a, "Adeola's welcome is in the log with her activation link", async () => {
-    const m = await waitEmail(ADEOLA.email, Date.now() - 600_000, (e) => /activate\?matric=/.test(e.body));
-    if (!m.body.includes(`${UNI}/activate?matric=LU%2FODL%2F24%2F0153`)) throw new Error(`unexpected link in: ${m.body.slice(0, 300)}`);
+  await step(a, `This run's student's welcome is in the log with the activation link`, async () => {
+    const m = await waitEmail(P.email, Date.now() - 600_000, (e) => /activate\?matric=/.test(e.body));
+    if (!m.body.includes(`${UNI}/activate?matric=${enc(P.matric)}`)) throw new Error(`unexpected link: ${m.body.slice(0, 300)}`);
   });
-  await step(a, "Checklist: step 9 done, 9 of 9", async () => { await checklist(a); await expectDone(a, 9); await a.getByText("9 of 9 steps complete").waitFor(); });
+  await step(a, "Checklist: step 9 done", async () => { await checklist(a); await expectDone(a, 9); });
 });
 
+// ================================================================== O · activation
 const pw = (label) => s.getByLabel(label, { exact: true });
-await group("O", "Adeola activates on her phone (M-01 … M-06, E-01 … E-03), 390 px", async () => {
-  await step(s, "Bola signs out; the student portal's welcome page (M-01) fits a 390 px phone", async () => {
+async function studentSignIn(matric, password) {
+  await s.getByLabel("Matric number or email").fill(matric); await pw("Password").fill(password); await s.getByRole("button", { name: "Sign in" }).click();
+}
+const home = () => s.getByRole("heading", { name: "Your courses appear after registration" });
+await group("O", `Activation on a phone (M-01 … M-06, E-01 … E-03), 390 px: this run's student ${P.matric}`, async () => {
+  await step(s, "Ngozi signs out; the student portal's welcome page (M-01) fits a 390 px phone", async () => {
     await leave(); await phone(); await s.goto(`${UNI}/`); await s.getByRole("link", { name: "Activate my account" }).waitFor(); await noSideways(s);
   });
   await step(s, "Negative - an unknown matric number (E-01)", async () => {
     await s.getByRole("link", { name: "Activate my account" }).click();
-    await s.getByLabel("Matric number").fill("LU/ODL/24/9999"); await s.getByRole("button", { name: "Send my code" }).click();
+    await s.getByLabel("Matric number").fill("WU/ODL/24/8888"); await s.getByRole("button", { name: "Send my code" }).click();
     await s.getByText(/We could not find this number/).waitFor(); await noSideways(s);
   });
-  await step(s, "Negative - a student with no email (E-03) is told to contact the centre", async () => {
+  await step(s, "Negative - a student with no email (E-03) is told to contact the Akure centre", async () => {
     await s.getByLabel("Matric number").fill(NO_EMAIL); await s.getByRole("button", { name: /Send my code|Try again/ }).click();
-    await s.getByText("We have no email address for you", { exact: true }).waitFor(); await s.getByText(/0803 555 0117/).first().waitFor();
+    await s.getByText("We have no email address for you", { exact: true }).waitFor(); await s.getByText(/Akure/).first().waitFor();
   });
   let t0 = 0;
-  await step(s, "The link in her welcome email opens with the matric number filled in; the code is sent (M-03)", async () => {
-    await s.goto(`${UNI}/activate?matric=LU%2FODL%2F24%2F0153`);
-    if ((await s.getByLabel("Matric number").inputValue()) !== ADEOLA.matric) throw new Error("the matric number is not filled in");
+  await step(s, "The link in the welcome email opens with the matric number filled in; the code is sent (M-03)", async () => {
+    await s.goto(`${UNI}/activate?matric=${enc(P.matric)}`);
+    if ((await s.getByLabel("Matric number").inputValue()) !== P.matric) throw new Error("the matric number is not filled in");
     t0 = Date.now(); await s.getByRole("button", { name: "Send my code" }).click();
-    await s.getByRole("heading", { name: "Enter the 6-digit code" }).waitFor(); await s.getByText(/a•+@lakeshore\.test/).waitFor(); await noSideways(s);
+    await s.getByRole("heading", { name: "Enter the 6-digit code" }).waitFor(); await s.getByText(/t•+@wesley\.test/).waitFor(); await noSideways(s);
   });
   let first = "";
   await step(s, "The code is in the email log within 60 seconds", async () => {
-    first = codeIn(await waitEmail(ADEOLA.email, t0, (e) => !!codeIn(e) && !/activate\?matric/.test(e.body)));
-    if (!first) throw new Error("no code in the email");
+    first = codeIn(await waitEmail(P.email, t0, (e) => !!codeIn(e) && !/activate\?matric/.test(e.body))); if (!first) throw new Error("no code in the email");
   });
   await step(s, "Negative - a wrong code: 2 tries left", async () => {
     await typeCode(s, first === "000000" ? "111111" : "000000"); await s.getByRole("button", { name: "Verify" }).click();
@@ -907,65 +1018,72 @@ await group("O", "Adeola activates on her phone (M-01 … M-06, E-01 … E-03), 
   });
   await step(s, "I can't access this email: the Akure centre to call", async () => {
     await s.getByRole("button", { name: "I can’t access this email" }).click();
-    const d = s.getByRole("dialog", { name: "Can’t access this email?" }); await d.getByText(/Akure Study Centre/).waitFor();
+    const d = s.getByRole("dialog", { name: "Can’t access this email?" }); await d.getByText(/Akure/).first().waitFor(); await dialogOk(s, "Can't access this email?");
     await d.getByRole("button", { name: "Cancel" }).click();
   });
   let second = "";
   await step(s, "Resend after the 60-second wait sends a new code", async () => {
     const btn = s.getByRole("button", { name: "Send a new code" }); await btn.waitFor({ timeout: 75_000 });
     const t1 = Date.now(); await btn.click(); await s.getByText(/We sent a new code to/).waitFor();
-    second = codeIn(await waitEmail(ADEOLA.email, t1, (e) => !!codeIn(e)));
+    second = codeIn(await waitEmail(P.email, t1, (e) => !!codeIn(e)));
   });
-  await step(s, "Right code: create a password; the rules tick as she types (M-04)", async () => {
-    await typeCode(s, second); await s.getByRole("button", { name: "Verify" }).click();
-    await s.getByRole("heading", { name: "Create a password" }).waitFor();
-    await pw("New password").fill("short"); await s.getByRole("list", { name: "Password rules" }).getByText(/\(not yet\)/).first().waitFor();
-    await noSideways(s);
+  await step(s, "Right code: create a password; the rules tick as you type (M-04)", async () => {
+    await typeCode(s, second); await s.getByRole("button", { name: "Verify" }).click(); await s.getByRole("heading", { name: "Create a password" }).waitFor();
+    await pw("New password").fill("short"); await s.getByRole("list", { name: "Password rules" }).getByText(/\(not yet\)/).first().waitFor(); await noSideways(s);
   });
   await step(s, "Negative - passwords that do not match", async () => {
-    await pw("New password").fill("Adeola2026"); await pw("Confirm password").fill("Adeola2025");
+    await pw("New password").fill("Tobi2026x"); await pw("Confirm password").fill("Tobi2025x");
     await s.getByRole("button", { name: "Continue" }).click(); await s.getByText("The two passwords do not match.").first().waitFor();
   });
   await step(s, "Privacy notice: accepting without the tick is refused, then accepted (M-05)", async () => {
-    await pw("Confirm password").fill("Adeola2026"); await s.getByRole("button", { name: "Continue" }).click();
+    await pw("Confirm password").fill("Tobi2026x"); await s.getByRole("button", { name: "Continue" }).click();
     await s.getByRole("heading", { name: "How we use your information" }).waitFor();
     await s.getByRole("button", { name: "Accept and continue" }).click(); await s.getByText("Tick the box to accept the privacy notice.").waitFor();
     await s.getByLabel("I have read and accept the privacy notice").check(); await s.getByRole("button", { name: "Accept and continue" }).click();
   });
-  await step(s, "Check your details (M-06), then Home with her programme and centre", async () => {
-    await s.getByRole("heading", { name: "Check your details" }).waitFor(); await s.getByText(/LU\/ODL\/24\/0153 · B\.Sc\. Computer Science · 200L/).waitFor();
-    await s.getByRole("button", { name: "Save and go to my dashboard" }).click();
-    await s.getByRole("heading", { name: "Your courses appear after registration" }).waitFor(); await s.getByText("Akure Study Centre").first().waitFor();
+  await step(s, "Check your details (M-06), then Home with programme and centre", async () => {
+    await s.getByRole("heading", { name: "Check your details" }).waitFor(); await s.getByText(new RegExp(`${P.matric.replaceAll("/", "\\/")} · B\\.Sc\\. Computer Science · 200L`)).waitFor();
+    await s.getByRole("button", { name: "Save and go to my dashboard" }).click(); await home().waitFor(); await s.getByText(/Akure/).first().waitFor();
     who = "student"; await noSideways(s);
   });
   await step(s, "Negative - activating again: this account is already active (E-02)", async () => {
-    await leave(); await s.goto(`${UNI}/activate?matric=LU%2FODL%2F24%2F0153`);
-    await s.getByRole("button", { name: "Send my code" }).click(); await s.getByText("This account is already active").waitFor();
+    await leave(); await s.goto(`${UNI}/activate?matric=${enc(P.matric)}`); await s.getByRole("button", { name: "Send my code" }).click(); await s.getByText("This account is already active").waitFor();
+  });
+  await step(s, "Adeola Okafor (WU/ODL/24/0153) is active and signs in with her password (activated or reset by code if needed)", async () => {
+    await s.goto(`${UNI}/sign-in`); await studentSignIn(ADEOLA.matric, ADEOLA.password);
+    const settle = (loc, v) => loc.waitFor().then(() => v, () => new Promise(() => {})); // the losers never settle, so nothing is left unhandled
+    const outcome = await Promise.race([settle(home(), "home"), settle(s.getByText(/not activated/i).first(), "inactive"), settle(s.getByText(/Wrong password|Too many attempts/).first(), "password")]);
+    if (outcome === "inactive") {
+      await s.goto(`${UNI}/activate?matric=${enc(ADEOLA.matric)}`); const t = Date.now(); await s.getByRole("button", { name: "Send my code" }).click();
+      await s.getByText(/a•+@wesley\.test/).waitFor(); await typeCode(s, codeIn(await waitEmail(ADEOLA.email, t, (e) => !!codeIn(e) && !/activate\?matric/.test(e.body))));
+      await s.getByRole("button", { name: "Verify" }).click(); await pw("New password").fill(ADEOLA.password); await pw("Confirm password").fill(ADEOLA.password);
+      await s.getByRole("button", { name: "Continue" }).click(); await s.getByLabel("I have read and accept the privacy notice").check(); await s.getByRole("button", { name: "Accept and continue" }).click();
+      await s.getByRole("button", { name: "Save and go to my dashboard" }).click(); await home().waitFor();
+    } else if (outcome === "password") {
+      await s.goto(`${UNI}/reset-password?login=${enc(ADEOLA.matric)}`); const t = Date.now(); await s.getByRole("button", { name: "Continue" }).click();
+      await s.getByText(/a•+@wesley\.test/).waitFor(); await typeCode(s, codeIn(await waitEmail(ADEOLA.email, t, (e) => !!codeIn(e)))); await s.getByRole("button", { name: "Verify" }).click();
+      await pw("New password").fill(ADEOLA.password); await pw("Confirm password").fill(ADEOLA.password); await s.getByRole("button", { name: "Save and sign in" }).click(); await home().waitFor();
+    }
+    who = "student";
   });
 });
 
-await group("P", "A second welcome send skips the student who is already active", async () => {
-  await step(a, "Bola signs back in at desktop size", async () => { await staffIn(ADMIN); });
-  await step(a, "The page counts 1 already active; the new send's report says it was skipped", async () => {
-    await a.goto(`${UNI}/staff/students/welcome`, { waitUntil: "networkidle" }); await a.getByText(/The 1 already active get nothing/).waitFor();
-    await a.getByRole("button", { name: /^Send to \d+ students?$/ }).click(); await a.getByRole("button", { name: "Send now" }).click();
-    const report = a.getByRole("dialog", { name: "Welcome messages sent" }); await report.waitFor({ timeout: 240_000 });
-    await report.getByText(/1 already active were skipped/).waitFor();
+// ================================================================== P · second send
+await group("P", "A second welcome send skips students who are already active", async () => {
+  await asAdmin();
+  await step(a, "The page counts the already-active students; the new send's report says they were skipped", async () => {
+    await a.goto(`${UNI}/staff/students/welcome`, { waitUntil: "networkidle" }); await a.getByText(/The [1-9][\d,]* already active get nothing/).waitFor();
+    const report = await sendToAll(); await report.getByText(/already active were skipped/).waitFor();
   });
 });
 
-await group("Q", "Student sign-in, lockout and reset by code (M-08, E-04, E-05, M-09 … M-11), 390 px", async () => {
-  async function signIn(pass) {
-    await s.getByLabel("Matric number or email").fill(ADEOLA.matric); await pw("Password").fill(pass);
-    await s.getByRole("button", { name: "Sign in" }).click();
-  }
+// ================================================================== Q · sign-in, lockout, reset
+await group("Q", `Student sign-in, lockout and reset by code (M-08, E-04, E-05, M-09 … M-11), 390 px: ${P.matric}`, async () => {
   await step(s, "Sign in with matric number and password: Home", async () => {
-    await leave(); await phone(); await s.goto(`${UNI}/sign-in`); await noSideways(s);
-    await signIn("Adeola2026"); await s.getByRole("heading", { name: "Your courses appear after registration" }).waitFor(); who = "student";
+    await leave(); await phone(); await s.goto(`${UNI}/sign-in`); await noSideways(s); await studentSignIn(P.matric, "Tobi2026x"); await home().waitFor(); who = "student";
   });
   await step(s, "Negative - a wrong password: 4 tries left (E-04)", async () => {
-    await leave(); await s.goto(`${UNI}/sign-in`);
-    await signIn("Wrong-pass1"); await s.getByText(/Wrong password\. 4 tries left/).waitFor();
+    await leave(); await s.goto(`${UNI}/sign-in`); await studentSignIn(P.matric, "Wrong-pass1"); await s.getByText(/Wrong password\. 4 tries left/).waitFor();
   });
   await step(s, "Negative - five wrong passwords lock sign-in with the time (E-05)", async () => {
     // Wait for each answer before the next try: the page clears the password field when the answer arrives.
@@ -973,146 +1091,112 @@ await group("Q", "Student sign-in, lockout and reset by code (M-08, E-04, E-05, 
       await pw("Password").fill(`Wrong-pass${i}`); await s.getByRole("button", { name: "Sign in" }).click();
       await (i < 5 ? s.getByText(new RegExp(`Wrong password\\. ${5 - i} tr(y|ies) left`)) : s.getByText("Too many attempts")).waitFor();
     }
-    await s.getByText("Too many attempts").waitFor(); await s.getByText(/until \d{1,2}:\d{2}\s?[ap]m/).first().waitFor();
-    if (await s.getByRole("button", { name: "Sign in" }).isEnabled()) throw new Error("Sign in is still enabled while locked");
-    await noSideways(s);
+    await s.getByText(/until \d{1,2}:\d{2}\s?[ap]m/).first().waitFor();
+    if (await s.getByRole("button", { name: "Sign in" }).isEnabled()) throw new Error("Sign in is still enabled while locked"); await noSideways(s);
   });
   await step(s, "Reset by emailed code from the lockout banner: new password, signed in", async () => {
     await s.getByRole("link", { name: "Reset password" }).click(); await s.waitForURL(/reset-password/);
-    const t0 = Date.now(); await s.getByRole("button", { name: "Continue" }).click();
-    await s.getByRole("heading", { name: "Enter the 6-digit code" }).waitFor();
-    await typeCode(s, codeIn(await waitEmail(ADEOLA.email, t0, (e) => !!codeIn(e)))); await s.getByRole("button", { name: "Verify" }).click();
+    const t0 = Date.now(); await s.getByRole("button", { name: "Continue" }).click(); await s.getByRole("heading", { name: "Enter the 6-digit code" }).waitFor();
+    await typeCode(s, codeIn(await waitEmail(P.email, t0, (e) => !!codeIn(e)))); await s.getByRole("button", { name: "Verify" }).click();
     await s.getByRole("heading", { name: "Choose a new password" }).waitFor();
-    await pw("New password").fill("Adeola2027"); await pw("Confirm password").fill("Adeola2027");
-    await s.getByRole("button", { name: "Save and sign in" }).click(); await s.getByRole("heading", { name: "Your courses appear after registration" }).waitFor();
-    who = "student";
+    await pw("New password").fill("Tobi2027x"); await pw("Confirm password").fill("Tobi2027x"); await s.getByRole("button", { name: "Save and sign in" }).click(); await home().waitFor(); who = "student";
   });
 });
 
+// ================================================================== R · office side
 await group("R", "The office side: students list and record (W-22, W-22b)", async () => {
-  const rec = a.getByRole("dialog", { name: ADEOLA.name });
-  async function openAdeola() { await a.goto(`${UNI}/staff/students?q=${encodeURIComponent(ADEOLA.matric)}`); await a.getByRole("button", { name: ADEOLA.name }).first().click(); await rec.getByText("Activation message").waitFor(); }
-  await step(a, "Adeola signs out; Bola signs in; search by name finds her", async () => {
-    await staffIn(ADMIN); await a.goto(`${UNI}/staff/students`); await a.getByLabel("Search students").fill("Okafor"); await a.getByRole("button", { name: "Find" }).click();
-    await a.getByRole("button", { name: ADEOLA.name }).first().waitFor();
+  const rec = a.getByRole("dialog", { name: P.name });
+  async function openP() { await a.goto(`${UNI}/staff/students?q=${enc(P.matric)}`); await a.getByRole("button", { name: P.name }).first().click(); await rec.getByText("Activation message").waitFor(); await dialogOk(a, P.name); }
+  await asAdmin();
+  await step(a, "Search by name, matric number and email", async () => {
+    await a.goto(`${UNI}/staff/students`); await a.getByLabel("Search students").fill(P.surname); await a.getByRole("button", { name: "Find" }).click(); await a.getByRole("button", { name: P.name }).first().waitFor();
+    await a.getByLabel("Search students").fill(P.matric); await a.getByRole("button", { name: "Find" }).click(); await a.getByText("1 student match.").waitFor();
+    await a.getByLabel("Search students").fill(P.email); await a.getByRole("button", { name: "Find" }).click(); await a.getByText("1 student match.").waitFor();
   });
-  await step(a, "Filters: Akure, 200L, Active shows only her", async () => {
+  await step(a, "Filters: Akure, 200L, Active include this run's student and Adeola", async () => {
     await a.goto(`${UNI}/staff/students`);
     await a.locator('select[name="centre"]').selectOption("AKR"); await a.locator('select[name="level"]').selectOption("200"); await a.locator('select[name="status"]').selectOption("ACTIVE");
-    await a.getByRole("button", { name: "Find" }).click(); await a.getByText("1 student match.").waitFor(); await a.getByRole("button", { name: ADEOLA.name }).first().waitFor();
+    await a.getByRole("button", { name: "Find" }).click(); await a.waitForURL(/status=ACTIVE/);
+    const r = (await W("/students?centre=AKR&level=200&status=ACTIVE&size=200")).body;
+    for (const m of [P.matric, ADEOLA.matric]) if (!r.items.some((x) => x.matricNumber === m)) throw new Error(`${m} is not in the filtered list`);
+    if (r.items.some((x) => x.status !== "ACTIVE" || x.level !== 200 || x.centre.code !== "AKR")) throw new Error("the filter let other students through");
   });
-  await step(a, "Search by matric number; the record shows her active with the consent date", async () => {
-    await a.goto(`${UNI}/staff/students?q=${encodeURIComponent(ADEOLA.matric)}`); await a.getByRole("button", { name: ADEOLA.name }).first().click();
-    await rec.getByText("Active").first().waitFor(); await rec.getByText(/Accepted the privacy notice \(version .+\) on/).waitFor(); await rec.getByText(/activated/).first().waitFor();
+  await step(a, "The record (W-22b) shows the student active with the consent date", async () => {
+    await openP(); await rec.getByText("Active").first().waitFor(); await rec.getByText(/Accepted the privacy notice \(version .+\) on/).waitFor(); await rec.getByText(/activated/).first().waitFor();
   });
   let t0 = 0;
   await step(a, "Send a reset code from the record", async () => {
-    t0 = Date.now(); await rec.getByRole("button", { name: "Send code" }).click();
-    await rec.getByText(`Emailed a password reset code to ${ADEOLA.email}.`).first().waitFor(); await a.keyboard.press("Escape");
+    t0 = Date.now(); await rec.getByRole("button", { name: "Send code" }).click(); await rec.getByText(`Emailed a password reset code to ${P.email}.`).first().waitFor(); await a.keyboard.press("Escape");
   });
-  await step(s, "The office's email link opens the reset screen without a second code; she sets a new password", async () => {
-    const m = await waitEmail(ADEOLA.email, t0, (e) => !!codeIn(e) && /reset-password/.test(e.body));
+  await step(s, "The office's email link opens the reset screen without a second code; a new password", async () => {
+    const m = await waitEmail(P.email, t0, (e) => !!codeIn(e) && /reset-password/.test(e.body));
     const link = (m.body.match(/https:\/\/\S+reset-password\S*/) ?? [])[0]; if (!link) throw new Error("no reset link in the email");
     await leave(); await phone(); await s.goto(link); await s.getByRole("heading", { name: "Enter the 6-digit code" }).waitFor();
     await typeCode(s, codeIn(m)); await s.getByRole("button", { name: "Verify" }).click();
-    await pw("New password").fill("Adeola2028"); await pw("Confirm password").fill("Adeola2028");
-    await s.getByRole("button", { name: "Save and sign in" }).click(); await s.getByRole("heading", { name: "Your courses appear after registration" }).waitFor();
-    who = "student";
-    const again = emails(ADEOLA.email).filter((e) => Date.parse(e.created_at) > Date.parse(m.created_at));
-    if (again.length) throw new Error("a second code was emailed");
+    await pw("New password").fill("Tobi2028x"); await pw("Confirm password").fill("Tobi2028x"); await s.getByRole("button", { name: "Save and sign in" }).click(); await home().waitFor(); who = "student";
+    if (emails(P.email).some((e) => Date.parse(e.created_at) > Date.parse(m.created_at))) throw new Error("a second code was emailed");
   });
-  await step(a, "Bola signs back in; resend the welcome from a not-activated student's record", async () => {
-    await staffIn(ADMIN); await a.goto(`${UNI}/staff/students?q=LU%2FODL%2F24%2F0001`); await a.locator("main table").getByRole("button").first().click();
-    const sheet = a.getByRole("dialog").filter({ hasText: "Activation message" });
-    await sheet.getByRole("button", { name: "Resend" }).click(); await sheet.getByText(/Sent the welcome email to/).first().waitFor(); await a.keyboard.press("Escape");
+  await asAdmin();
+  await step(a, "Resend the welcome from a not-activated student's record", async () => {
+    await a.goto(`${UNI}/staff/students?q=${enc("WU/ODL/24/0001")}`); await a.locator("main table").getByRole("button").first().click();
+    const sheet = a.getByRole("dialog").filter({ hasText: "Activation message" }); await dialogOk(a, "Student record");
+    await sheet.getByRole("button", { name: /^(Resend|Send)$/ }).click(); await sheet.getByText(/Sent the welcome email to/).first().waitFor(); await a.keyboard.press("Escape");
   });
-  await step(a, "Suspend Adeola (reason required)", async () => {
-    await openAdeola();
-    await rec.getByRole("button", { name: "Suspend this student" }).click();
-    const d = a.getByRole("dialog", { name: `Suspend ${ADEOLA.name}?` });
+  await step(a, "Suspend the student (reason required)", async () => {
+    await openP(); await rec.getByRole("button", { name: "Suspend this student" }).click();
+    const d = a.getByRole("dialog", { name: `Suspend ${P.name}?` }); await dialogOk(a, `Suspend ${P.name}?`);
     await d.getByRole("button", { name: "Suspend" }).click(); await d.getByText(/Write why/).waitFor();
-    await d.getByLabel("Reason").fill("Fees query"); await d.getByRole("button", { name: "Suspend" }).click();
-    await a.getByText(`${ADEOLA.name} is suspended and was signed out.`).first().waitFor();
+    await d.getByLabel("Reason").fill("Fees query"); await d.getByRole("button", { name: "Suspend" }).click(); await a.getByText(`${P.name} is suspended and was signed out.`).first().waitFor();
   });
-  await step(s, "Negative - suspended: her sign-in is refused (E-06)", async () => {
-    await leave(); await phone(); await s.goto(`${UNI}/sign-in`);
-    await s.getByLabel("Matric number or email").fill(ADEOLA.matric); await pw("Password").fill("Adeola2028"); await s.getByRole("button", { name: "Sign in" }).click();
-    await s.getByText("Your account is suspended").waitFor();
+  await step(s, "Negative - suspended: sign-in is refused (E-06)", async () => {
+    await leave(); await phone(); await s.goto(`${UNI}/sign-in`); await studentSignIn(P.matric, "Tobi2028x"); await s.getByText("Your account is suspended").waitFor();
   });
-  await step(a, "Bola signs in and restores her access", async () => {
-    await staffIn(ADMIN); await openAdeola();
-    await rec.getByRole("button", { name: "Restore access" }).click(); await a.getByText(`${ADEOLA.name} can sign in again.`).first().waitFor(); await a.keyboard.press("Escape");
+  await asAdmin();
+  await step(a, "Ngozi restores access", async () => {
+    await openP(); await rec.getByRole("button", { name: "Restore access" }).click(); await a.getByText(`${P.name} can sign in again.`).first().waitFor(); await a.keyboard.press("Escape");
   });
-  await step(s, "She signs in again", async () => {
-    await leave(); await phone(); await s.goto(`${UNI}/sign-in`);
-    await s.getByLabel("Matric number or email").fill(ADEOLA.matric); await pw("Password").fill("Adeola2028"); await s.getByRole("button", { name: "Sign in" }).click();
-    await s.getByRole("heading", { name: "Your courses appear after registration" }).waitFor(); who = "student";
+  await step(s, "The student signs in again", async () => {
+    await leave(); await phone(); await s.goto(`${UNI}/sign-in`); await studentSignIn(P.matric, "Tobi2028x"); await home().waitFor(); who = "student";
   });
 });
 
+// ================================================================== S · audit log
 await group("S", "The university's audit log", async () => {
-  await step(a, "Adeola signs out; Bola signs in", async () => { await staffIn(ADMIN); });
+  await asAdmin();
   async function has(type, re) {
-    await a.goto(`${UNI}/staff/reports/audit${type ? `?type=${type}` : ""}`);
-    await a.getByRole("table", { name: /Audit log/ }).waitFor();
+    await a.goto(`${UNI}/staff/reports/audit${type ? `?type=${type}` : ""}`); await a.getByRole("table", { name: /Audit log/ }).waitFor();
     if (!re.test(await a.locator("main").innerText())) throw new Error(`the ${type ?? "full"} audit log does not show ${re}`);
   }
-  await step(a, "The import", async () => { await has("STUDENTS", new RegExp(`Imported ${PORTAL_NAME}: 299 added`)); });
-  await step(a, "The welcome sends", async () => { await has("STUDENTS", /sent the welcome email to \d+ students not yet active \(1 already active skipped\)/); });
-  await step(a, "Her activation", async () => { await has("SIGN_IN", /Adeola Okafor \(LU\/ODL\/24\/0153\) activated the account/); });
-  await step(a, "Her suspension", async () => { await has("STUDENTS", /suspended Adeola Okafor/); });
-  await step(a, "Her password resets", async () => { await has("STUDENTS", /Adeola Okafor chose a new password with an emailed code/); });
-  await step(a, "Dr Bello's suspension and two-step reset", async () => {
-    await has("ROLES", /Suspended Dr Funmi Bello: On leave from 1 Dec/); await has("SIGN_IN", /Reset Dr Funmi Bello's two-step sign-in: Lost phone/);
+  const m = P.matric.replaceAll("/", "\\/");
+  await step(a, "This run's import", async () => { await has("STUDENTS", new RegExp(`Imported ${PORTAL_NAME.replaceAll(".", "\\.")}: `)); });
+  await step(a, "The welcome sends", async () => { await has("STUDENTS", /sent the welcome email to [\d,]+ students not yet active \([1-9][\d,]* already active skipped\)/); });
+  await step(a, "The student's activation", async () => { await has("SIGN_IN", new RegExp(`${P.name} \\(${m}\\) activated the account`)); });
+  await step(a, "The student's suspension and password resets", async () => {
+    await has("STUDENTS", new RegExp(`suspended ${P.name} \\(${m}\\)`)); await has("STUDENTS", new RegExp(`${P.name} chose a new password with an emailed code`));
   });
-});
-
-await group("S2", "Audit entries carry the person's own IP address", async () => {
-  await step(a, "The university's audit log shows a real client IP, not the server's own", async () => {
-    await a.goto(`${UNI}/staff/reports/audit`);
-    const r = await apiGet(a, "/api/v1/audit?size=50");
-    const ips = [...new Set(r.body.items.map((x) => x.ip))];
+  await step(a, "Dr Bello's suspension and two-step reset", async () => { await has("ROLES", /Suspended Dr Funmi Bello: On leave from 1 Dec/); await has("SIGN_IN", /Reset Dr Funmi Bello's two-step sign-in: Lost phone/); });
+  await step(a, "Entries carry the person's own IP address, not the server's", async () => {
+    await a.goto(`${UNI}/staff/reports/audit`); const ips = [...new Set((await W("/audit?size=50")).body.items.map((x) => x.ip))];
     if (ips.some((ip) => /^(127\.|::1$|0:0:0:0:0:0:0:1$)/.test(ip ?? ""))) throw new Error(`audit IPs: ${ips.join(", ")}`);
   });
-  await step(c, "(diagnostic) IPs in the platform audit over time", async () => {
-    await consoleIn(); const r = await apiGet(c, "/api/v1/platform/audit?size=200");
-    const byHour = {};
-    for (const x of r.body?.items ?? []) { const k = `${String(x.at).slice(0, 13)} ${x.ip}`; byHour[k] = (byHour[k] ?? 0) + 1; }
-    console.log("      " + Object.entries(byHour).map(([k, v]) => `${k}×${v}`).join(" · "));
-  });
 });
 
-await group("T", "Universities are kept apart: Wesley cannot see Lakeshore", async () => {
-  await step(a, "Lakeshore's admin opening Wesley's staff pages is sent to Wesley's sign-in", async () => {
-    await a.goto(`${WESLEY}/staff/students`); await a.waitForURL(/\/staff\/sign-in/);
+// ================================================================== T · isolation
+await group("T", "Universities are kept apart: Crestfield cannot see Wesley", async () => {
+  await asAdmin();
+  const CREST = `https://crestfield.${BASE}`;
+  await step(a, "Ngozi opening Crestfield's staff pages is sent to Crestfield's sign-in", async () => { await a.goto(`${CREST}/staff/students`); await a.waitForURL(/\/staff\/sign-in/); }, { allow: [401, 403] });
+  await step(a, "Crestfield's API refuses Wesley's session", async () => {
+    for (const path of ["/api/v1/students?q=Okafor", "/api/v1/setup/checklist"]) { const r = await apiGet(a, path); if (r.status !== 401 && r.status !== 403) throw new Error(`${path} answered ${r.status}`); }
   }, { allow: [401, 403] });
-  await step(a, "Wesley's API refuses Lakeshore's session", async () => {
-    const r = await apiGet(a, "/api/v1/students?q=Okafor"); if (r.status !== 401 && r.status !== 403) throw new Error(`Wesley answered ${r.status}`);
-    const k = await apiGet(a, "/api/v1/setup/checklist"); if (k.status !== 401 && k.status !== 403) throw new Error(`Wesley's checklist answered ${k.status}`);
-  }, { allow: [401, 403] });
-  await step(a, "Negative - Lakeshore's admin cannot sign in on Wesley", async () => {
-    await google(a, uni.email); await a.waitForURL(/error=wrong_domain/);
+  await step(a, "Negative - Ngozi cannot sign in on Crestfield", async () => { await google(a, NGOZI.email); await a.waitForURL(/error=wrong_domain/); });
+  await step(s, "Negative - a Wesley matric number is unknown on Crestfield's student portal", async () => {
+    await s.goto(`${CREST}/sign-in`); await studentSignIn(P.matric, "Tobi2028x"); await s.getByText(/could not find that matric number/).waitFor();
   });
-  await step(s, "Negative - Adeola's matric number is unknown on Wesley's portal", async () => {
-    await s.goto(`${WESLEY}/sign-in`); await s.getByLabel("Matric number or email").fill(ADEOLA.matric); await pw("Password").fill("Adeola2028");
-    await s.getByRole("button", { name: "Sign in" }).click(); await s.getByText(/could not find that matric number/).waitFor();
-  });
-  await step(a, "Lakeshore's own pages still work for its admin", async () => { await checklist(a); });
+  await step(a, "Wesley's own pages still work for Ngozi", async () => { await checklist(a); });
 });
-
-// Always, even after a failure: delete the test university so dev keeps only the real ones.
-await group("Z", "Clean up: the test university is deleted", async () => {
-  await step(c, "Provider deletes Lakeshore (dev only)", async () => {
-    if (!uniId) throw new Error("the test university was not created, nothing to delete");
-    await deleteUni(uniId);
-  });
-  await step(a, "Its address now shows 'not set up'", async () => {
-    await a.waitForTimeout(61_000); // the gateway remembers an address for a minute
-    await a.goto(`${UNI}/staff/sign-in`); await a.getByText("This web address is not set up").waitFor();
-  }, { allow: [404] });
-}, { always: true });
 
 await browser.close();
 const passed = results.filter((r) => r.ok).length;
-console.log(`\n${passed} of ${results.length} steps passed.`);
+console.log(`\nRun ${RUN} (student ${P.matric}). ${passed} of ${results.length} steps passed.`);
 process.exit(passed === results.length ? 0 : 1);

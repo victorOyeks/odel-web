@@ -177,7 +177,7 @@ function InviteForm({ domain, onClose, onSaved }: { domain: string; onClose: () 
     >
       {act.error && !Object.keys(act.fields).length ? <Banner tone="danger" title="Not sent">{act.error.message}</Banner> : null}
       <TextField label="Full name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Type their full name" error={act.fields.fullName} autoFocus autoComplete="off" />
-      <TextField label="University email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={`name@${domain}`} hint={`Must end in @${domain}`} error={act.fields.email} autoComplete="off" />
+      <TextField label="University email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={`name@${domain}`} hint={act.fields.email ? undefined : `Must end in @${domain}`} error={act.fields.email} autoComplete="off" />
       <RoleEditor value={roles} onChange={setRoles} fields={act.fields} opts={opts} />
     </Panel>
   );
