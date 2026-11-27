@@ -23,6 +23,7 @@ const ROLE_ICON: Record<RoleCode, IconName> = {
   DEAN: "school",
   REGISTRY: "how_to_reg",
   COUNSELLOR: "support_agent",
+  STUDENT: "school",
 };
 
 export const roleIcon = (r: RoleCode): IconName => ROLE_ICON[r] ?? "person";

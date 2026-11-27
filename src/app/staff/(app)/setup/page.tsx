@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { apiGet, getContext, getSession } from "@/lib/api/server";
 import { expectSession } from "@/lib/guard";
-import type { Checklist } from "@/lib/types";
+import type { ChecklistB1 } from "@/lib/types-b1";
 import { PageHeader } from "@/components/shell/page-header";
 import { ButtonLink } from "@/components/ui/button";
 import { PageState } from "@/components/ui/page-state";
@@ -21,14 +21,14 @@ function greetingName(fullName: string) {
   return /^(Dr|Prof|Mr|Mrs|Ms)\.?$/.test(parts[0]) && parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]}` : parts[0];
 }
 
-/** W-10 Setup checklist (empty, day-one state as in D10 SA-05c). */
+/** W-10 Setup checklist from real data (day one looks like D10 SA-05c). */
 export default async function SetupPage() {
-  const [res, session, ctx] = await Promise.all([apiGet<Checklist>("/setup/checklist").then(expectSession), getSession(), getContext()]);
+  const [res, session, ctx] = await Promise.all([apiGet<ChecklistB1>("/setup/checklist").then(expectSession), getSession(), getContext()]);
   const uni = ctx.ok ? ctx.data.tenant.name.split(" ")[0] : "The university";
   const header = (
     <PageHeader
-      title={`Set up ${sessionLabel()}`}
-      subtitle={`Welcome, ${greetingName(session?.user.fullName ?? "")}. Work through these steps in order; ${uni} goes live when they are done.`}
+      title={`Set up ${(res.ok && res.data.sessionName) || sessionLabel()}`}
+      subtitle={`Welcome, ${greetingName(session?.user.fullName ?? "")}. Work through these steps in order. Students can activate once the import is done; ${uni} goes live when every step is done.`}
       actions={
         <ButtonLink href="/" variant="secondary" leadingIcon="visibility">
           Preview as a student
