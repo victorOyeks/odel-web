@@ -21,7 +21,8 @@ function fmt(sec: number) {
  * (any API call resets its clock). We mirror that clock here: warn 2 minutes
  * before, sign out at 0. Tabs share the clock through localStorage.
  */
-export function IdleTimer({ timeoutSeconds, surface }: { timeoutSeconds: number; surface: Surface }) {
+export function IdleTimer({ timeoutSeconds, surface, signInHref }: { timeoutSeconds: number; surface: Surface; signInHref?: string }) {
+  const signIn = signInHref ?? signInPath(surface);
   const pathname = usePathname();
   const timeoutMs = timeoutSeconds * 1000;
   const deadline = useRef(0);
@@ -48,9 +49,9 @@ export function IdleTimer({ timeoutSeconds, surface }: { timeoutSeconds: number;
       if (ending.current) return;
       ending.current = true;
       await api("POST", "/auth/sign-out");
-      hardNavigate(`${signInPath(surface)}?${why === "idle" ? "reason=idle" : "signedOut=1"}`);
+      hardNavigate(`${signIn}?${why === "idle" ? "reason=idle" : "signedOut=1"}`);
     },
-    [surface],
+    [signIn],
   );
 
   // Page load and every navigation count as activity (pages call the API).
@@ -90,7 +91,7 @@ export function IdleTimer({ timeoutSeconds, surface }: { timeoutSeconds: number;
     setBusy(null);
     setRemaining(null);
     if (!r.ok && r.status === 401) {
-      hardNavigate(`${signInPath(surface)}?reason=idle`);
+      hardNavigate(`${signIn}?reason=idle`);
       return;
     }
     touch();
