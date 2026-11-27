@@ -3,7 +3,6 @@
 // viewed without the Spring Boot API. State lives in memory on globalThis.
 import type {
   AuditItem,
-  Checklist,
   NewTenant,
   Notification,
   PublicContext,
@@ -23,6 +22,11 @@ import {
   type MockTenant,
   type Persona,
 } from "./data";
+import { adminPerson, demoUni, emptyUni, type Uni } from "./b1-data";
+import { academicRoute } from "./b1-academic";
+import { peopleRoute } from "./b1-people";
+import { studentSessionUser, studentsRoute } from "./b1-students";
+import type { B1Ctx } from "./b1-util";
 
 interface MockSession {
   id: string;
@@ -34,6 +38,8 @@ interface MockSession {
   idleSeconds: number;
   wrongAttempts: number;
   backupLeft: number;
+  /** Set for a student session (password sign-in, B1). */
+  studentId?: string;
 }
 
 interface MockStore {
@@ -43,6 +49,7 @@ interface MockStore {
   uploads: Map<string, { type: string; body: ArrayBuffer }>;
   notifications: Notification[];
   remembered: Map<string, string>; // persona -> last active role
+  b1: Map<string, Uni>; // host label -> academic and student data
 }
 
 const g = globalThis as unknown as { __odelMock?: MockStore };
@@ -55,6 +62,7 @@ function store(): MockStore {
       sessions: new Map(),
       uploads: new Map(),
       remembered: new Map(),
+      b1: new Map(),
       notifications: [
         {
           id: "n1",
@@ -161,7 +169,36 @@ function personaOf(s: MockSession): Persona {
   return PERSONAS.find((p) => p.key === s.persona) ?? PERSONAS[0];
 }
 
+/** B1 data for a university host: Wesley comes set up for the demo (unless the seed is empty); the rest start on day one. */
+function uniFor(host: string): Uni {
+  const label = hostLabel(host);
+  const st = store();
+  let u = st.b1.get(label);
+  if (!u) {
+    const t = tenantForHost(host);
+    const admin = { fullName: t?.firstAdmin?.fullName ?? "Ngozi Adebayo", email: t?.firstAdmin?.email ?? "ngozi.adebayo@wesleyuni.edu.ng" };
+    if (label === "wesley" && process.env.ODEL_MOCK_SEED !== "empty") u = demoUni(admin);
+    else {
+      u = emptyUni();
+      u.people.push(adminPerson(admin.fullName, admin.email));
+    }
+    st.b1.set(label, u);
+  }
+  return u;
+}
+
 function sessionBody(s: MockSession): Session {
+  if (s.studentId) {
+    const su = studentSessionUser(uniFor(s.host), s.studentId);
+    return {
+      stage: "SIGNED_IN",
+      user: su?.user ?? { id: "u-student", fullName: "Student", email: "", initials: "S" },
+      roles: [{ id: "r-student", role: "STUDENT", roleLabel: "Student", scopeType: "UNIVERSITY", scopeId: null, scopeLabel: su?.scopeLabel ?? "" }],
+      activeRoleId: "r-student",
+      idleTimeoutSeconds: s.idleSeconds,
+      idleExpiresAt: new Date(s.lastSeen + s.idleSeconds * 1000).toISOString(),
+    };
+  }
   const p = personaOf(s);
   const t = tenantForHost(s.host);
   const user = p.user!(t);
@@ -300,6 +337,18 @@ export async function mockHandle(req: Request, host: string): Promise<Response> 
       if (s.stage === "MFA_REQUIRED" && trusted) afterMfa(s);
       st.sessions.set(s.id, s);
       audit(s, "SIGN_IN", `${sessionBody(s).user.fullName} signed in with Google`, tenantForHost(host));
+      if (surface === "university") {
+        const b = sessionBody(s);
+        uniFor(host).audit.unshift({
+          id: crypto.randomUUID(),
+          at: new Date().toISOString(),
+          type: "SIGN_IN",
+          action: "SIGN_IN",
+          summary: `${b.user.fullName} signed in (Google${s.stage === "MFA_SETUP" ? ", setting up two-step" : " and two-step code"})`,
+          actor: { id: b.user.id, fullName: b.user.fullName, role: b.roles[0]?.role ?? null, roleLabel: b.roles[0]?.roleLabel ?? null },
+          ip: "127.0.0.1",
+        });
+      }
       return redirect(`/auth/continue?next=${encodeURIComponent(returnTo)}`, [
         cookie("ODEL_SESSION", s.id, { httpOnly: true }),
       ]);
@@ -383,39 +432,6 @@ export async function mockHandle(req: Request, host: string): Promise<Response> 
       return json(200, sessionBody(session));
     }
 
-    // ---- setup checklist
-    if (method === "GET" && path === "/setup/checklist") {
-      const denied = requireSignedIn();
-      if (denied) return denied;
-      if (activeRole()?.role !== "ODEL_ADMIN") return forbidden();
-      const step = (n: number, key: string, title: string, summary: string, href: string, locked = false) => ({
-        number: n,
-        key,
-        title,
-        summary,
-        status: locked ? "LOCKED" : "NOT_STARTED",
-        actionLabel: "Start",
-        href,
-        ...(locked ? { lockedReason: "Finish steps 1–7 first" } : {}),
-      });
-      const body: Checklist = {
-        steps: [
-          step(1, "SESSION", "Session and semesters", "Session dates and semesters", "/staff/academic-setup/sessions"),
-          step(2, "STRUCTURE", "Academic structure", "Faculties, departments and programmes", "/staff/academic-setup/structure"),
-          step(3, "CATALOGUE", "Course catalogue", "Courses for each programme", "/staff/courses"),
-          step(4, "CENTRES", "Study centres", "Where students study and sit exams", "/staff/centres"),
-          step(5, "PEOPLE", "People and roles", "Invite lecturers, coordinators and staff", "/staff/people"),
-          step(6, "STAFFING", "Assign staff to courses and centres", "Who teaches each course and runs each centre", "/staff/people/assignments"),
-          step(7, "GRADING", "Grading rules", "Default 5-point scale (30% CA / 70% exam)", "/staff/academic-setup/grading"),
-          step(8, "IMPORT", "Import students", "From the university portal CSV", "/staff/students/import", true),
-          step(9, "WELCOME", "Send welcome messages", "Email with activation link", "/staff/students/welcome", true),
-        ] as Checklist["steps"],
-        done: 0,
-        total: 9,
-      };
-      return json(200, body);
-    }
-
     // ---- notifications
     if (path.startsWith("/notifications")) {
       const denied = requireSignedIn();
@@ -459,6 +475,46 @@ export async function mockHandle(req: Request, host: string): Promise<Response> 
     if (logo && method === "GET") {
       const f = st.uploads.get(logo[1]);
       return f ? new Response(f.body, { headers: { "content-type": f.type } }) : err(404, "not_found");
+    }
+
+    // ---- B1: academic setup, people & roles, audit, students, student accounts
+    if (surface === "university" && tenantForHost(host)) {
+      const signedInStaff = session && session.stage === "SIGNED_IN" && !session.studentId ? sessionBody(session) : null;
+      const active = signedInStaff?.roles.find((r) => r.id === session!.activeRoleId);
+      const t = tenantForHost(host)!;
+      const ctx: B1Ctx = {
+        req,
+        url,
+        path,
+        method,
+        uni: uniFor(host),
+        tenant: { name: t.name, googleDomain: t.googleDomain, portalUrl: t.portalUrl ?? `http://${host}` },
+        staff: signedInStaff ? { id: signedInStaff.user.id, fullName: signedInStaff.user.fullName, email: signedInStaff.user.email, role: active?.role, roleLabel: active?.roleLabel ?? "" } : null,
+        studentId: session?.studentId ?? null,
+        uploads: st.uploads,
+        signInStudent: (studentId, keep) => {
+          const ns: MockSession = {
+            id: crypto.randomUUID(),
+            persona: "student",
+            host: hostLabel(host),
+            stage: "SIGNED_IN",
+            activeRoleId: "r-student",
+            lastSeen: Date.now(),
+            idleSeconds: Number(url.searchParams.get("idle")) || 1800,
+            wrongAttempts: 0,
+            backupLeft: 0,
+            studentId,
+          };
+          st.sessions.set(ns.id, ns);
+          setCookies.push(cookie("ODEL_SESSION", ns.id, { httpOnly: true, ...(keep ? { maxAge: 12 * 3600 } : {}) }));
+          return sessionBody(ns);
+        },
+        endStudentSessions: (studentId, exceptCurrent) => {
+          for (const [k, v] of st.sessions) if (v.studentId === studentId && !(exceptCurrent && v === session)) st.sessions.delete(k);
+        },
+      };
+      const out = (await academicRoute(ctx)) ?? (await peopleRoute(ctx)) ?? (await studentsRoute(ctx));
+      if (out) return out;
     }
 
     return err(404, "not_found", "Nothing here.");

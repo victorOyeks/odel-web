@@ -27,7 +27,17 @@ const COPY = {
       { icon: "history", text: "Every provider action kept in the audit trail" },
     ],
   },
-} satisfies Record<Surface, { portal: string; headline: string; body: string; points: { icon: IconName; text: string }[] }>;
+  student: {
+    portal: "ODeL Portal",
+    headline: "Your degree, at your own pace.",
+    body: "Open and distance learning: study from home, meet your facilitator at your study centre, sit exams near you.",
+    points: [
+      { icon: "videocam", text: "Live classes, with recordings and slides you can download" },
+      { icon: "menu_book", text: "Course materials that work on a slow connection" },
+      { icon: "location_on", text: "Exams and support at your study centre" },
+    ],
+  },
+} satisfies Record<Surface | "student", { portal: string; headline: string; body: string; points: { icon: IconName; text: string }[] }>;
 
 /** The crest on a white tile: crests are drawn for light backgrounds, so they never sit straight on the brand colour. */
 function Crest({ name, logoUrl, size }: { name: string; logoUrl: string | null | undefined; size: "sm" | "lg" }) {
@@ -44,9 +54,10 @@ function Crest({ name, logoUrl, size }: { name: string; logoUrl: string | null |
  * Staff and provider sign-in frame (W-01 … W-06, S-02): brand panel on the left from 1024 px, the form in a
  * card on the right; on tablets and phones a slim brand header sits above the card.
  */
-export function AuthLayout({ ctx, surface, children }: { ctx: PublicContext; surface: Surface; children: ReactNode }) {
-  const copy = COPY[surface];
+export function AuthLayout({ ctx, surface, children, student = false }: { ctx: PublicContext; surface: Surface; children: ReactNode; student?: boolean }) {
   const t = ctx.tenant;
+  const base = COPY[student ? "student" : surface];
+  const copy = student ? { ...base, headline: `Your ${t.shortName?.replace(/ ODeL$/, "") ?? t.name.split(" ")[0]} degree, at your own pace.` } : base;
   const year = new Date().getFullYear();
   return (
     <div className="flex min-h-dvh flex-1 flex-col bg-canvas lg:flex-row">
@@ -94,7 +105,7 @@ export function AuthLayout({ ctx, surface, children }: { ctx: PublicContext; sur
           <div className="mt-10 flex items-center justify-between gap-4 border-t border-white/15 pt-5 text-body-sm opacity-75">
             <span className="flex items-center gap-2">
               <Icon name="lock" size={16} />
-              Protected by two-step sign-in
+              {student ? "Your data is protected under the NDPA 2023" : "Protected by two-step sign-in"}
             </span>
             <span>
               © {year} {t.name}
@@ -119,7 +130,7 @@ export function AuthLayout({ ctx, surface, children }: { ctx: PublicContext; sur
             {children}
           </div>
           <p className="text-center text-body-sm text-ink-3">
-            {surface === "console" ? "Platform team only. Every sign-in is recorded." : "Need help signing in? Contact the ODeL office at your study centre."}
+            {surface === "console" ? "Platform team only. Every sign-in is recorded." : student ? "Need help? Contact the ODeL office at your study centre." : "Need help signing in? Contact the ODeL office at your study centre."}
           </p>
         </div>
       </main>

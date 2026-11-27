@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireSignedIn } from "@/lib/guard";
 import { AppShell } from "@/components/shell/app-shell";
 import { STAFF_FOOTER, staffNav } from "@/components/shell/roles";
@@ -8,6 +8,8 @@ export default async function StaffLayout({ children }: LayoutProps<"/staff">) {
   const { session, ctx, surface } = await requireSignedIn();
   if (surface !== "university") notFound();
   const active = session.roles.find((r) => r.id === session.activeRoleId);
+  // A student session never gets the staff shell.
+  if (active?.role === "STUDENT") redirect("/");
   return (
     <AppShell
       surface={surface}

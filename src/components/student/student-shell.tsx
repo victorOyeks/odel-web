@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { Logo } from "@/components/ui/logo";
 import type { IconName } from "@/components/ui/icon-names";
 import { OfflineBanner } from "@/components/states/offline-banner";
+import { StudentSignOut } from "./sign-out";
 
 type Item = { key: string; label: string; href: string; icon: IconName };
 
@@ -84,10 +85,7 @@ export function StudentShell({ university, student, active, title, unread, child
             <SideLink key={i.key} item={i} active={i.key === active} />
           ))}
           <li>
-            <Link href="/" className="flex h-10 items-center gap-3 rounded-md px-3 text-label text-ink-2 hover:bg-subtle">
-              <Icon name="logout" className="text-icon-2" />
-              Sign out
-            </Link>
+            <StudentSignOut className="flex h-10 w-full items-center gap-3 rounded-md px-3 text-label text-ink-2 hover:bg-subtle" />
           </li>
         </ul>
       </nav>
@@ -101,6 +99,7 @@ export function StudentShell({ university, student, active, title, unread, child
             <p className="truncate text-body-sm text-ink-2">{student.context}</p>
           </div>
           <Bell unread={unread} />
+          <StudentSignOut compact className="flex size-12 items-center justify-center rounded-md text-icon hover:bg-subtle" />
         </header>
         {/* Web top bar */}
         <header className="sticky top-0 z-20 hidden h-16 items-center gap-4 border-b border-line bg-surface px-6 lg:flex">

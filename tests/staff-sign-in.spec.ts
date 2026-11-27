@@ -1,13 +1,14 @@
 import { expect, test } from "@playwright/test";
-import { enterCode, signInAs, wesley } from "./helpers";
+import { crestfield, enterCode, signInAs, wesley } from "./helpers";
 
 test("first ODeL admin: W-01 → W-04 → W-05 → empty W-10 → S-04 sign out → S-02", async ({ page }) => {
   await page.goto(wesley("/staff"));
   await expect(page).toHaveURL(/\/staff\/sign-in\?next=%2Fstaff/);
-  await expect(page.getByRole("heading", { name: "Staff sign in" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to your staff account" })).toBeVisible();
   await expect(page.getByText("Use your @wesleyuni.edu.ng Google account.")).toBeVisible();
 
-  await signInAs(page, wesley("/staff/sign-in"), /^First ODeL admin, first sign-in/);
+  // Crestfield starts on day one (Wesley is seeded with the D1 demo data).
+  await signInAs(page, crestfield("/staff/sign-in"), /^First ODeL admin, first sign-in/);
   await expect(page.getByRole("heading", { name: "Protect your account" })).toBeVisible();
   await expect(page.getByRole("img", { name: /QR code/ })).toBeVisible();
   await expect(page.getByText("JBSW Y3DP EHPK 3PXP")).toBeVisible();
@@ -23,11 +24,11 @@ test("first ODeL admin: W-01 → W-04 → W-05 → empty W-10 → S-04 sign out 
 
   await expect(page).toHaveURL(/\/staff\/setup$/);
   await expect(page.getByRole("heading", { level: 1, name: /^Set up \d{4}\/\d{4}$/ })).toBeVisible();
-  await expect(page.getByText("0 of 9 steps complete")).toBeVisible();
+  // b1-academic.spec.ts may already have set Crestfield up in this server run.
+  await expect(page.getByText(/^\d of 9 steps complete$/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Setup checklist" })).toHaveAttribute("aria-current", "page");
   const steps = page.getByRole("region", { name: "Setup steps" }).getByRole("listitem");
   await expect(steps).toHaveCount(9);
-  await expect(steps.nth(7)).toContainText("Locked");
 
   // A menu item that is not built yet is an honest empty state, not a broken page.
   await page.getByRole("link", { name: "Payments" }).click();

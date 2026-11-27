@@ -123,7 +123,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/staff/sig
                 <span className="h-px flex-1 bg-line" />
               </div>
               <Link
-                href="/"
+                href="/sign-in"
                 className="group flex items-center gap-3 rounded-xl border border-line px-4 py-3.5 hover:border-brand-muted hover:bg-brand-subtle"
               >
                 <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-brand">

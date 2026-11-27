@@ -50,7 +50,7 @@ test("the console is not reachable from a university address", async ({ page }) 
 
 test("student home and the dev state gallery", async ({ page }) => {
   await page.goto(wesley("/"));
-  await expect(page.getByRole("heading", { name: "Student portal opens soon" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome to the ODeL portal" })).toBeVisible();
   await page.goto(wesley("/dev/states"));
   for (const name of ["No content yet", "Could not load this page", "You do not have access", "You were signed out", "Platform fee not paid"]) {
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();

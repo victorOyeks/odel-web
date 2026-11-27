@@ -1,0 +1,13 @@
+import type { ReactNode } from "react";
+import { AcademicTabs } from "@/components/academic/tabs";
+import { AdminOnly } from "@/components/staff/admin-only";
+
+/** Academic setup: Sessions · Structure · Staffing · Grading (W-11 … W-17e). */
+export default function AcademicSetupLayout({ children }: { children: ReactNode }) {
+  return (
+    <AdminOnly>
+      <AcademicTabs />
+      {children}
+    </AdminOnly>
+  );
+}
