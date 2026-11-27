@@ -371,7 +371,6 @@ await group("B", "Provider adds Lakeshore University, staff domain lakeshore.tes
 });
 
 const ADMIN = { key: "admin", pick: "Bola Ige", secret: () => adminSecret, trust: true };
-const BELLO_IN = { key: "bello", pick: "f.bello@lakeshore.test", secret: () => belloSecret };
 await group("C", "Bola Ige (ODeL admin) gets in: two-step set-up, day-one checklist (W-10)", async () => {
   await step(a, "Lakeshore's sign-in page", async () => {
     // The gateway remembers an unknown address for a minute (e.g. right after the previous run deleted it): try again until it opens.

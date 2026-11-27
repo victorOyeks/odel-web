@@ -228,12 +228,14 @@ function Report({ send, onClose }: { send: WelcomeSend; onClose: () => void }) {
   useEffect(() => {
     Promise.all([
       api<Paged<Delivery>>("GET", `/students/welcome/sends/${send.id}/deliveries?status=FAILED&size=100`),
-      api<Paged<Delivery>>("GET", `/students/welcome/sends/${send.id}/deliveries?status=SKIPPED&size=100`),
-    ]).then(([a, b]) => setFailed([...(a.ok ? a.data.items : []), ...(b.ok ? b.data.items : [])]));
+      api<Paged<Delivery>>("GET", `/students/welcome/sends/${send.id}/deliveries?status=SKIPPED_NO_EMAIL&size=100`),
+      api<Paged<Delivery>>("GET", `/students/welcome/sends/${send.id}/deliveries?status=SKIPPED_TEST_ADDRESS&size=100`),
+    ]).then((rs) => setFailed(rs.flatMap((r) => (r.ok ? r.data.items : [])))); // the ones the office can fix first
   }, [send.id]);
   return (
     <Panel
       open
+      width="lg"
       onClose={onClose}
       title="Welcome messages sent"
       description={`Sent ${formatWhen(send.startedAt)} to ${plural(t.toSend + t.skippedNoEmail, "student")}.${send.remindAfterDays ? ` Anyone who has not activated in ${send.remindAfterDays} days gets one reminder.` : ""}`}
