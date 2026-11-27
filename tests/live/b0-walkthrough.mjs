@@ -86,7 +86,7 @@ async function typeCode(page, value) {
 const slug = process.env.SLUG ?? "lakeshore";
 const uni = { name: "Lakeshore University", short: "Lakeshore ODeL", slug, admin: "Bola Ige", email: `oyeksglobal+${slug}@gmail.com`, domain: "gmail.com" };
 const UNI = `https://${slug}.${BASE}`;
-let adminSecret = null, backup = [];
+let adminSecret = null, backup = [], uniId = null;
 
 await group("A · Provider signs in to the console", async () => {
   await step(c, "Console asks to sign in (not signed in)", async () => { await c.goto(CONSOLE); await c.waitForURL(/\/sign-in/); });
@@ -146,6 +146,7 @@ await group("B · Provider adds Lakeshore University (SA-02 to SA-05b)", async (
   });
   await step(c, "Created - next steps show it is live at its platform address (SA-05b)", async () => {
     await c.getByRole("button", { name: "Create the university" }).click(); await c.getByText(/is set up/).first().waitFor();
+    uniId = c.url().match(/universities\/([0-9a-f-]{36})/)?.[1] ?? null;
     await c.locator("main").getByText(/Live at https:/).filter({ visible: true }).first().waitFor();
     const live = await c.locator("main").innerText();
     if (!live.includes(`Live at ${UNI}`)) throw new Error(`expected "Live at ${UNI}" on the page`);
@@ -234,6 +235,20 @@ await group("F · Provider sees it all (SA-01b, SA-09)", async () => {
   await step(c, "Audit trail - creation, sign-ins, failed codes, sign-outs (SA-09)", async () => {
     await c.goto(`${CONSOLE}/audit`); await c.locator("main").getByText(/Bola Ige signed in/).first().waitFor();
     await c.locator("main").getByText(new RegExp(`Created Lakeshore University`)).first().waitFor();
+  });
+});
+
+// Always, even after a failure: delete the test university so dev keeps only the real ones.
+await group("G · Clean up: the test university is deleted", async () => {
+  await step(c, "Provider deletes Lakeshore (dev only)", async () => {
+    if (!uniId) throw new Error("the test university was not created, nothing to delete");
+    const xsrf = (await consoleCtx.cookies(CONSOLE)).find((k) => k.name === "XSRF-TOKEN")?.value ?? "";
+    const r = await c.request.delete(`${CONSOLE}/api/v1/dev/tenants/${uniId}`, { headers: { "X-XSRF-TOKEN": xsrf } });
+    if (r.status() !== 204) throw new Error(`delete answered ${r.status()}: ${await r.text()}`);
+  });
+  await step(a, "Its address now shows 'not set up'", async () => {
+    await a.waitForTimeout(61_000); // the gateway remembers an address for a minute
+    await a.goto(`${UNI}/staff/sign-in`); await a.getByText("This web address is not set up").waitFor();
   });
 });
 
