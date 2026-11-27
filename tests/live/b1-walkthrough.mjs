@@ -150,6 +150,33 @@ async function layoutProblems(page) {
     const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
     for (const d of [...document.querySelectorAll("dialog[open], [role=dialog]")].filter(vis)) {
       const r = d.getBoundingClientRect(); const name = (d.querySelector("h2,h1")?.textContent ?? "dialog").trim().slice(0, 50);
+      // Text drawn on top of other text: every visible text run, compared with every other one in the dialog.
+      const runs = [];
+      const walker = document.createTreeWalker(d, NodeFilter.SHOW_TEXT);
+      for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+        const text = t.textContent.trim(); const el = t.parentElement;
+        if (!text || !el || el.closest("option, select, script, style")) continue;
+        const range = document.createRange(); range.selectNodeContents(t);
+        for (const tr of range.getClientRects()) {
+          if (tr.width <= 2 || tr.height <= 2) continue; // screen-reader-only text
+          let clipped = false;
+          for (let a = el; a && a !== document.body; a = a.parentElement) {
+            const cs = getComputedStyle(a);
+            if (/(auto|hidden|scroll|clip)/.test(cs.overflow + cs.overflowY + cs.overflowX)) {
+              const ar = a.getBoundingClientRect();
+              if (tr.top < ar.top - 1 || tr.bottom > ar.bottom + 1 || tr.left < ar.left - 1 || tr.right > ar.right + 1) { clipped = true; break; }
+            }
+          }
+          if (!clipped) runs.push({ text: text.slice(0, 40), el, r: tr });
+        }
+      }
+      for (let i = 0; i < runs.length; i++) for (let j = i + 1; j < runs.length; j++) {
+        const A = runs[i], B = runs[j];
+        if (A.el === B.el) continue;
+        const w = Math.min(A.r.right, B.r.right) - Math.max(A.r.left, B.r.left), h = Math.min(A.r.bottom, B.r.bottom) - Math.max(A.r.top, B.r.top);
+        if (w > 3 && h > 3) { out.push(`in "${name}" the text "${A.text}" overlaps "${B.text}"`); i = runs.length; break; }
+      }
+      if (runs.some((x) => /^Loading/.test(x.text))) out.push(`LOADING in "${name}"`);
       if (r.top < -1 || r.bottom > window.innerHeight + 1 || r.left < -1 || r.right > window.innerWidth + 1) out.push(`"${name}" is ${Math.round(r.height)}px tall and does not fit the ${window.innerHeight}px window`);
       for (const btn of [...d.querySelectorAll("button, a[href]")].filter(vis)) {
         const b = btn.getBoundingClientRect(); const label = btn.textContent.trim().slice(0, 30);
@@ -167,7 +194,10 @@ async function step(page, title, fn, { allow = [] } = {}) {
   try {
     await fn();
     await page.waitForTimeout(1000); // let the person watching see the result
-    const lay = await layoutProblems(page).catch(() => []);
+    let lay = await layoutProblems(page).catch(() => []);
+    // A dialog may show "Loading…" for a moment; after 5 seconds it must have loaded.
+    for (let t = 0; t < 5 && lay.some((x) => x.startsWith("LOADING")); t++) { await page.waitForTimeout(1000); lay = await layoutProblems(page).catch(() => []); }
+    lay = lay.map((x) => (x.startsWith("LOADING") ? `"Loading…" still shows after 5 seconds ${x.slice(8)}` : x));
     if (lay.length) throw new Error(`Layout: ${lay.join(" | ")}`);
     await shot(page, title);
     await settleCalls();

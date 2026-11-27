@@ -1046,9 +1046,8 @@ export async function academicRoute(ctx: B1Ctx): Promise<Response | null> {
     return json(200, { copied, skipped, from: from.name, to: toS.name });
   }
   if (method === "GET" && path === "/academic/staff-options") {
-    const r = url.searchParams.get("role") ?? "";
     const dep = url.searchParams.get("departmentId");
-    const items = u.people
+    const optionsFor = (r: string) => u.people
       .filter((p) => p.status !== "SUSPENDED" && p.roles.some((x) => x.role === r))
       .map((p) => {
         const ro = p.roles.find((x) => x.role === r)!;
@@ -1057,7 +1056,9 @@ export async function academicRoute(ctx: B1Ctx): Promise<Response | null> {
       })
       .sort((a, b) => a.first - b.first || a.fullName.localeCompare(b.fullName))
       .map(({ first: _f, ...x }) => (void _f, x));
-    return json(200, { items });
+    const roles = url.searchParams.get("roles");
+    if (roles) return json(200, { byRole: Object.fromEntries(roles.split(",").map((r) => [r.trim(), optionsFor(r.trim())])) });
+    return json(200, { items: optionsFor(url.searchParams.get("role") ?? "") });
   }
 
   // ---- grading

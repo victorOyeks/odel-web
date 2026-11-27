@@ -102,9 +102,9 @@ export function RoleEditor({ value, onChange, fields, opts }: { value: RoleInput
                   onChange={(e) => update(i, { scopeId: e.target.value || null })}
                   error={fields[`roles[${i}].scopeId`]}
                   disabled={!opts}
-                  hint={!opts ? "Loading…" : !list.length ? `None yet. Add ${r.scopeType === "COURSE" ? "courses in the catalogue" : r.scopeType === "CENTRE" ? "centres" : "them on Academic structure"} first.` : undefined}
+                  hint={!opts ? undefined : !list.length ? `None yet. Add ${r.scopeType === "COURSE" ? "courses in the catalogue" : r.scopeType === "CENTRE" ? "centres" : "them on Academic structure"} first.` : undefined}
                 >
-                  <option value="">Choose</option>
+                  <option value="">{opts ? "Choose" : "Loading…"}</option>
                   {list.map((o) => (
                     <option key={o.id} value={o.id}>
                       {o.label}

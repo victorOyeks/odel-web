@@ -204,29 +204,45 @@ export function StaffingView({ staffing, tab }: { staffing: Staffing; tab: "cour
   );
 }
 
-function useOptions(role: string, extra?: PersonRef | null) {
-  const [opts, setOpts] = useState<StaffOption[] | null>(null);
+/** The staff lists a staffing dialog needs, loaded once for the whole dialog (one request), with a retry. */
+function useStaffOptions(roles: string[]) {
+  const key = roles.join(",");
+  const [byRole, setByRole] = useState<Record<string, StaffOption[]> | null>(null);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
-    api<{ items: StaffOption[] }>("GET", `/academic/staff-options?role=${role}`).then((r) => {
+    api<{ byRole: Record<string, StaffOption[]> }>("GET", `/academic/staff-options?roles=${key}`).then((r) => {
       if (!alive) return;
-      if (r.ok) setOpts(r.data.items);
+      if (r.ok) setByRole(r.data.byRole);
       else setFailed(true);
     });
     return () => {
       alive = false;
     };
-  }, [role]);
-  return { opts, failed, extra };
+  }, [key, attempt]);
+  const retry = () => {
+    setFailed(false);
+    setByRole(null);
+    setAttempt((x) => x + 1);
+  };
+  return { of: (role: string) => (byRole ? byRole[role] ?? [] : null), failed, retry };
+}
+
+function LoadFailed({ onRetry }: { onRetry: () => void }) {
+  return (
+    <Banner tone="danger" title="We could not load the staff list" action={<button type="button" className="min-h-12 underline md:min-h-0" onClick={onRetry}>Try again</button>}>
+      Check your connection, then try again.
+    </Banner>
+  );
 }
 
 function PersonSelect({ label, hint, value, onChange, options, current, error, emptyLabel }: { label: string; hint?: string; value: string; onChange: (v: string) => void; options: StaffOption[] | null; current: PersonRef | null; error?: string; emptyLabel: string }) {
   const list = options ?? [];
   const showCurrent = current && !list.some((o) => o.id === current.id);
   return (
-    <SelectField label={label} hint={options === null ? "Loading staff…" : !list.length ? `Nobody has this role yet. Give it on People & roles first.` : hint} value={value} onChange={(e) => onChange(e.target.value)} error={error} disabled={options === null}>
-      <option value="">{emptyLabel}</option>
+    <SelectField label={label} hint={options === null ? undefined : !list.length ? `Nobody has this role yet. Give it on People & roles first.` : hint} value={options === null ? "" : value} onChange={(e) => onChange(e.target.value)} error={error} disabled={options === null} aria-busy={options === null || undefined}>
+      <option value="">{options === null ? "Loading…" : emptyLabel}</option>
       {showCurrent ? (
         <option value={current.id}>
           {current.fullName} {current.status === "SUSPENDED" ? "(suspended)" : ""}
@@ -244,15 +260,12 @@ function PersonSelect({ label, hint, value, onChange, options, current, error, e
 }
 
 function CourseStaffing({ row, centres, onClose, onSaved }: { row: StaffingCourse; centres: StaffingCentre[]; onClose: () => void; onSaved: () => void }) {
-  const lect = useOptions("LECTURER");
-  const fac = useOptions("FACILITATOR");
-  const exam = useOptions("EXAM_OFFICER");
+  const staff = useStaffOptions(["LECTURER", "FACILITATOR", "EXAM_OFFICER"]);
   const act = useAction();
   const [lecturerId, setLecturer] = useState(row.lecturer?.id ?? "");
   const [examId, setExam] = useState(row.examOfficer?.id ?? "");
   const [facs, setFacs] = useState<Record<string, string>>(Object.fromEntries(row.facilitators.map((f) => [f.centreId, f.user.id])));
   const [notify, setNotify] = useState(true);
-  const failed = lect.failed || fac.failed || exam.failed;
 
   async function save() {
     const r = await act.run("save", "PUT", `/academic/staffing/courses/${row.course.id}`, {
@@ -289,21 +302,27 @@ function CourseStaffing({ row, centres, onClose, onSaved }: { row: StaffingCours
         </>
       }
     >
-      {failed ? <Banner tone="danger" title="We could not load the staff list">Close this and try again.</Banner> : null}
+      {staff.failed ? <LoadFailed onRetry={staff.retry} /> : null}
       {act.error && !Object.keys(act.fields).length ? <Banner tone="danger" title="Not saved">{act.error.message}</Banner> : null}
-      <PersonSelect label="Lecturer" hint="Staff with the Lecturer role, from People & roles." value={lecturerId} onChange={setLecturer} options={lect.opts} current={row.lecturer} error={act.fields.lecturerId} emptyLabel="No lecturer yet" />
-      <fieldset className="flex flex-col gap-3">
-        <legend className="text-label text-ink">Facilitators · one per study centre</legend>
-        <p className="-mt-2 text-body-sm text-ink-2">Each runs tutorials, answers the course forum and marks coursework at their centre.</p>
+      <PersonSelect label="Lecturer" hint="Staff with the Lecturer role, from People & roles." value={lecturerId} onChange={setLecturer} options={staff.of("LECTURER")} current={row.lecturer} error={act.fields.lecturerId} emptyLabel="No lecturer yet" />
+      <div role="group" aria-labelledby="fac-head" aria-describedby="fac-desc" className="flex flex-col gap-3 rounded-md border border-line p-4">
+        <div className="flex flex-col gap-1">
+          <p id="fac-head" className="text-label text-ink">
+            Facilitators · one per study centre
+          </p>
+          <p id="fac-desc" className="text-body-sm text-ink-2">
+            Each runs tutorials, answers the course forum and marks coursework at their centre.
+          </p>
+        </div>
         {centres.map((c) => {
           const cur = row.facilitators.find((f) => f.centreId === c.centre.id)?.user ?? null;
           return (
             <PersonSelect
               key={c.centre.id}
-              label={`${c.centre.name}${c.students ? ` · ${c.students.toLocaleString("en-NG")} students` : ""}`}
+              label={`${c.centre.name}${c.students ? ` · ${plural(c.students, "student")}` : ""}`}
               value={facs[c.centre.id] ?? ""}
               onChange={(v) => setFacs((x) => ({ ...x, [c.centre.id]: v }))}
-              options={fac.opts}
+              options={staff.of("FACILITATOR")}
               current={cur}
               error={facErr(c.centre.id)}
               emptyLabel="Needs a facilitator"
@@ -311,15 +330,15 @@ function CourseStaffing({ row, centres, onClose, onSaved }: { row: StaffingCours
           );
         })}
         {!centres.length ? <p className="text-body text-ink-2">Add study centres to choose facilitators.</p> : null}
-      </fieldset>
-      <PersonSelect label="Exam officer" hint="Staff with the Exam officer role." value={examId} onChange={setExam} options={exam.opts} current={row.examOfficer} error={act.fields.examOfficerId} emptyLabel="No exam officer yet" />
+      </div>
+      <PersonSelect label="Exam officer" hint="Staff with the Exam officer role." value={examId} onChange={setExam} options={staff.of("EXAM_OFFICER")} current={row.examOfficer} error={act.fields.examOfficerId} emptyLabel="No exam officer yet" />
       <Checkbox label="Email them that they have been assigned" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
     </Panel>
   );
 }
 
 function CentreCoordinator({ row, onClose, onSaved }: { row: StaffingCentre; onClose: () => void; onSaved: () => void }) {
-  const coord = useOptions("CENTRE_COORDINATOR");
+  const staff = useStaffOptions(["CENTRE_COORDINATOR"]);
   const act = useAction();
   const [id, setId] = useState(row.coordinator?.id ?? "");
   const [notify, setNotify] = useState(true);
@@ -345,8 +364,9 @@ function CentreCoordinator({ row, onClose, onSaved }: { row: StaffingCentre; onC
         </>
       }
     >
+      {staff.failed ? <LoadFailed onRetry={staff.retry} /> : null}
       {act.error && !Object.keys(act.fields).length ? <Banner tone="danger" title="Not saved">{act.error.message}</Banner> : null}
-      <PersonSelect label="Coordinator" hint="Staff with the Centre coordinator role. Students at this centre contact them." value={id} onChange={setId} options={coord.opts} current={row.coordinator} error={act.fields.coordinatorId} emptyLabel="Needs a coordinator" />
+      <PersonSelect label="Coordinator" hint="Staff with the Centre coordinator role. Students at this centre contact them." value={id} onChange={setId} options={staff.of("CENTRE_COORDINATOR")} current={row.coordinator} error={act.fields.coordinatorId} emptyLabel="Needs a coordinator" />
       <Checkbox label="Email them that they have been assigned" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
     </Panel>
   );
