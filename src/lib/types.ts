@@ -35,7 +35,8 @@ export type RoleCode =
   | "HOD"
   | "DEAN"
   | "REGISTRY"
-  | "COUNSELLOR";
+  | "COUNSELLOR"
+  | "STUDENT";
 
 export type ScopeType =
   | "PLATFORM"
@@ -87,6 +88,11 @@ export interface ApiError {
   message?: string;
   fields?: Record<string, string>;
   attemptsLeft?: number;
+  retryInSeconds?: number;
+  retryAt?: string;
+  resendInSeconds?: number;
+  maskedEmail?: string;
+  centre?: { name: string; phone: string | null } | null;
 }
 
 export type ChecklistStatus = "NOT_STARTED" | "IN_PROGRESS" | "DONE" | "LOCKED";
