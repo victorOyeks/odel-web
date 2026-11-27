@@ -288,7 +288,7 @@ function overview(ctx: B1Ctx) {
   const vars = varsFor(ctx, sample);
   const last = u.sends[u.sends.length - 1];
   return {
-    template: { subject: u.welcome.subject, body: u.welcome.body, custom: u.welcome.custom, updatedAt: u.welcome.updatedAt, updatedBy: u.welcome.updatedBy ? { fullName: u.welcome.updatedBy } : null },
+    template: { subject: u.welcome.subject, body: u.welcome.body, custom: u.welcome.custom, updatedAt: u.welcome.updatedAt, updatedBy: u.welcome.updatedBy },
     fields: FIELDS,
     preview: { studentName: sample ? fullName(sample) : "Adeola Okafor", subject: fill(u.welcome.subject, vars), body: fill(u.welcome.body, vars) },
     audience: {

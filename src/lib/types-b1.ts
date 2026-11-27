@@ -544,7 +544,7 @@ export interface WelcomeSend {
 }
 
 export interface WelcomeOverview {
-  template: { subject: string; body: string; custom: boolean; updatedAt: string | null; updatedBy: { fullName: string } | null | string };
+  template: { subject: string; body: string; custom: boolean; updatedAt: string | null; updatedBy: string | null };
   fields: { key: string; label: string; example: string }[];
   preview: { studentName: string; subject: string; body: string };
   audience: { notActivated: number; withEmail: number; noEmail: number; alreadyActive: number };

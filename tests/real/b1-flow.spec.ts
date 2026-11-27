@@ -118,7 +118,7 @@ test("B1 end to end through the web app against the real API", async ({ page }) 
   });
 
   await test.step("W-12 structure and W-12c import with a bad row", async () => {
-    await page.goto(WEB("/staff/academic-setup/structure"));
+    await page.goto(WEB("/staff/academic-setup/structure"), { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Add faculty" }).first().click();
     let dlg = page.getByRole("dialog", { name: "Add a faculty" });
     await dlg.getByLabel("Name").fill("Faculty of Science");
@@ -219,7 +219,7 @@ test("B1 end to end through the web app against the real API", async ({ page }) 
     await page.goto(WEB("/staff/setup"));
     const steps = page.getByRole("region", { name: "Setup steps" }).getByRole("listitem");
     for (const i of [0, 3, 6]) await expect(steps.nth(i)).toContainText("Done");
-    await page.goto(WEB("/staff/students/import"));
+    await page.goto(WEB("/staff/students/import"), { waitUntil: "networkidle" });
     await page.getByLabel("Choose the portal CSV file").setInputFiles(
       csvFile("portal_export.csv", [
         "matric_number,surname,first_name,other_names,programme_code,level,study_centre,email,phone",
@@ -234,7 +234,7 @@ test("B1 end to end through the web app against the real API", async ({ page }) 
   });
 
   await test.step("W-20 test send, send to all, W-20c report", async () => {
-    await page.goto(WEB("/staff/students/welcome"));
+    await page.goto(WEB("/staff/students/welcome"), { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Send a test to me" }).click();
     await expect(page.getByText(`Sent a test to ${ADMIN}.`, { exact: false })).toBeVisible();
     await page.getByRole("button", { name: /^Send to \d+ students?$/ }).click();
@@ -278,6 +278,8 @@ test("B1 end to end through the web app against the real API", async ({ page }) 
     await page.context().clearCookies();
     await devGoogle(page, WEB("/staff/sign-in"), ADMIN);
     await twoStep(page, ADMIN);
+    await expect(page).toHaveURL(/\/staff\/setup$/);
+    await expect(page.getByText(/of 9 steps complete/)).toBeVisible();
     await page.goto(WEB(`/staff/students?q=${encodeURIComponent(MATRIC)}`));
     await page.getByRole("button", { name: "Adeola Okafor" }).first().click();
     const sheet = page.getByRole("dialog", { name: "Adeola Okafor" });
