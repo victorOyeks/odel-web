@@ -6,7 +6,7 @@ import { createHmac } from "node:crypto";
 
 const IP = "62.169.21.189";
 const CONSOLE = "https://odel-console-dev.oyeksglobal.com";
-const WESLEY = "https://odel-dev.oyeksglobal.com";
+const WESLEY = "https://wesley.odel-dev.oyeksglobal.com";
 const BASE = "odel-dev.oyeksglobal.com";
 // The provider admin's authenticator secret is never in the repo: pass it in ODEL_E2E_PROVIDER_TOTP.
 const CHUKA = { name: "Chuka Obi", email: "chuka.obi@oyeksglobal.com", secret: process.env.ODEL_E2E_PROVIDER_TOTP ?? "" };
