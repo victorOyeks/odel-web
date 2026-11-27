@@ -145,8 +145,10 @@ await group("B · Provider adds Lakeshore University (SA-02 to SA-05b)", async (
     await c.getByRole("button", { name: "Next: review" }).click(); await c.getByRole("button", { name: "Create the university" }).waitFor();
   });
   await step(c, "Created - next steps show it is live at its platform address (SA-05b)", async () => {
-    await c.getByRole("button", { name: "Create the university" }).click(); await c.getByText(/is set up/).waitFor();
-    await c.getByText(new RegExp(`Live at ${UNI.replace(/[.]/g, "\\.")}`)).first().waitFor();
+    await c.getByRole("button", { name: "Create the university" }).click(); await c.getByText(/is set up/).first().waitFor();
+    await c.locator("main").getByText(/Live at https:/).filter({ visible: true }).first().waitFor();
+    const live = await c.locator("main").innerText();
+    if (!live.includes(`Live at ${UNI}`)) throw new Error(`expected "Live at ${UNI}" on the page`);
   });
   await step(c, "University page - web addresses and the invitation (SA-01b)", async () => {
     await c.getByText("Open the university page").click(); await c.getByText("Web addresses").waitFor();
