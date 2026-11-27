@@ -491,7 +491,19 @@ await group("A", "Ngozi Adebayo (ODeL admin) signs in on Wesley; the checklist (
     await google(a, "ngozi@gmail.com"); await a.waitForURL(/error=wrong_domain/);
   });
   await step(a, "Ngozi chosen, her two-step code, trusted computer: the setup checklist", async () => { await staffIn(ADMIN); await checklist(a); });
-  await step(a, "Phone size: the checklist on a 390 px screen", async () => {
+  await step(a, "The crest loads with the page: preloaded in the head, then from the browser cache on the next page", async () => {
+    const head = await a.evaluate(() => [...document.querySelectorAll('link[rel="preload"][as="image"]')].map((l) => l.getAttribute("href")));
+    if (!head.some((h) => /\/api\/v1\/public\/logos\//.test(h ?? ""))) throw new Error(`no logo preload in the head: ${head.join(", ")}`);
+    const cdp = await a.context().newCDPSession(a); await cdp.send("Network.enable");
+    const fetched = [];
+    cdp.on("Network.responseReceived", (e) => { if (e.response.url.includes("/public/logos/") && !e.response.fromDiskCache && !e.response.fromMemoryCache && e.response.status === 200) fetched.push(e.response.url); });
+    await a.goto(`${UNI}/staff/academic-setup/sessions`); await a.waitForLoadState("load"); await a.waitForTimeout(800);
+    await cdp.detach();
+    if (fetched.length) throw new Error(`the crest was downloaded again: ${fetched.join(", ")}`);
+    const img = a.locator('img[src*="/public/logos/"]').first();
+    if (!(await img.evaluate((el) => el.complete && el.naturalWidth > 0))) throw new Error("the crest is not shown");
+  });
+  await step(a, "Phone size: the checklist on a 390 px screen", async () => { await checklist(a);
     await phone(); await a.reload(); await a.getByText(/of 9 steps complete/).waitFor(); await noSideways(a);
   });
   await desk();
