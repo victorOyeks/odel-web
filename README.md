@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# odel-web
 
-## Getting Started
+Web app for the ODeL platform: the student web (`/`) and staff web (`/staff/*`) on each university's address, and the provider console on the console address. One Next.js app (App Router, React Server Components, Tailwind CSS v4), run with Bun. The API is [odel-backend](../odel-backend) (Spring Boot); the B0 contract is `odel-backend/docs/api-b0.md`.
 
-First, run the development server:
+## Run it
+
+There is no Node on the dev Mac; use Bun.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+export PATH=$HOME/.bun/bin:$PATH
+bun install
+
+# Against the real API (odel-backend on :8080, dev profile)
+bun run dev                 # http://wesley.localhost:3000/staff
+
+# Without the API: typed fixtures that follow the contract
+bun run dev:mock            # ODEL_MOCK_API=1
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Use `bun run dev`, not `bun --bun next dev`: under the Bun runtime the Next 16 dev server keeps sending Fast Refresh rebuilds and the page reloads in a loop. Production (`next start`) is fine under `--bun`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Dev hosts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`*.localhost` resolves to 127.0.0.1 in Chrome, Firefox and Playwright's Chromium; no hosts-file edits.
 
-## Learn More
+| Address | What you get |
+|---|---|
+| `http://wesley.localhost:3000/` | Wesley University: student home (opens-soon page in B0) |
+| `http://wesley.localhost:3000/staff` | Wesley staff web (sign-in, setup checklist) |
+| `http://crestfield.localhost:3000/staff` | Same app in Crestfield's colours (mock mode seeds it; with the real API, create it in the console first) |
+| `http://console.localhost:3000/` | Provider console |
+| `http://paused.localhost:3000/staff/sign-in` | Mock mode only: a suspended university |
+| `http://wesley.localhost:3000/dev/states` | Dev-only gallery: student shell + shared states (404 in a real production build) |
 
-To learn more about Next.js, take a look at the following resources:
+The host decides the surface (`src/proxy.ts`): `console.*` serves the console, whose pages live under `/console/*` internally; every other host is a university.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Environment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Variable | Default | |
+|---|---|---|
+| `ODEL_API_URL` | `http://localhost:8080` | Where `/api/*` is forwarded |
+| `ODEL_MOCK_API` | unset | `1` = mock mode. Never set in production |
+| `ODEL_MOCK_SEED` | `demo` | Mock only: `demo` seeds Wesley and Crestfield, `empty` starts with no universities (SA-01 empty state) |
 
-## Deploy on Vercel
+See `.env.example`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## How it talks to the API
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- The browser only talks to this host. `src/app/api/[...path]/route.ts` forwards `/api/*` to `ODEL_API_URL`, adds `X-Odel-Host` (the browser's host), and passes redirects (`redirect: "manual"`), bodies (including file PUTs to `/api/v1/dev/storage/**`) and every `Set-Cookie` through untouched, so session and CSRF cookies are first-party.
+- Google sign-in is browser navigation to `/api/v1/auth/google/start?returnTo=…` through that proxy. The chain ends at `/auth/continue`, which reads `GET /session` and routes by stage.
+- Server components read with `apiGet()` (`src/lib/api/server.ts`), forwarding the cookie and host. Every write goes from the browser through `api()` (`src/lib/api/client.ts`), which sends `X-XSRF-TOKEN` from the `XSRF-TOKEN` cookie.
+- Branding: the root layout calls `GET /public/context` and writes the university's colours as CSS variables (`src/lib/brand.ts` derives the tints), so a new university needs no code change.
+
+## Mock mode
+
+`ODEL_MOCK_API=1` swaps the proxy and server reads for `src/lib/mock/handler.ts`, which answers the same paths, status codes and bodies as the contract (CSRF and idle timeout included). "Continue with university Google account" opens `/dev/mock-google`, where you pick who signs in:
+
+- first ODeL admin (2FA setup → backup codes → empty checklist), returning admin (2FA code), admin with three roles (choose role, role switcher), lecturer/HOD/exam officer, platform admin (console);
+- each with a "2-minute idle timeout" link to see S-01 quickly;
+- every sign-in error: not linked, no role, wrong domain, suspended, cancelled, expired.
+
+Codes: any 6 digits except `000000`; backup codes look like `4827-1930`.
+
+## Checks
+
+```bash
+bun run lint
+bun run typecheck
+bun run build
+bun run test                                   # Playwright, mock mode, against the build (port 3100)
+SCREENSHOTS=1 bunx playwright test screenshots # review screenshots into ./screenshots (gitignored)
+
+# End to end against the real API (API on :8080 dev profile, `bun run dev` on :3000):
+bunx playwright test -c playwright.real.config.ts
+# If the seeded people already have two-step sign-in, pass their secrets:
+# ODEL_TOTP_CHUKA_OBI=… ODEL_TOTP_NGOZI_ADEBAYO=… bunx playwright test -c playwright.real.config.ts
+```
+
+## Layout
+
+```
+src/proxy.ts                    host → surface (console rewrite)
+src/app/api/[...path]           same-origin API proxy (or mock)
+src/app/(student)               student web: / and its sections
+src/app/staff/sign-in/*         W-01 … W-06, S-02 (the console re-exports them)
+src/app/staff/(app)/*           staff shell, setup checklist, coming-later pages
+src/app/console/(app)/*         provider console
+src/app/dev/*                   mock Google, state gallery (dev and mock only)
+src/components/ui               design-system primitives (D0 library)
+src/lib                         API clients, mock, brand maths, helpers
+```
+
+Icons are a subset of Material Symbols Rounded (`src/fonts`, ~9 KB). After using a new icon name, add it to `src/components/ui/icon-names.ts` and run `bun run icons`.
+
+Routes, their Figma frames and status: [docs/routes.md](docs/routes.md).

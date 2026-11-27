@@ -13,6 +13,13 @@ import { AuthLead, AuthTitle } from "./auth-layout";
 import { OtpInput } from "./otp-input";
 import { pathForStage } from "./routing";
 
+// One POST per attempt, even when React runs the effect twice in development.
+let pending: { attempt: number; promise: ReturnType<typeof api<MfaSetup>> } | null = null;
+function startSetup(attempt: number) {
+  if (!pending || pending.attempt !== attempt) pending = { attempt, promise: api<MfaSetup>("POST", "/auth/mfa/setup") };
+  return pending.promise;
+}
+
 /** W-04 2FA setup, then W-05 backup codes (shown once, never in the URL). */
 export function SetupFlow({ surface, next, fileStem }: { surface: Surface; next: string; fileStem: string }) {
   const [setup, setSetup] = useState<MfaSetup | null>(null);
@@ -25,7 +32,7 @@ export function SetupFlow({ surface, next, fileStem }: { surface: Surface; next:
 
   useEffect(() => {
     let live = true;
-    api<MfaSetup>("POST", "/auth/mfa/setup").then((r) => {
+    startSetup(attempt).then((r) => {
       if (!live) return;
       if (r.ok) setSetup(r.data);
       else if (r.error.error === "signed_out") hardNavigate(`${signInPath(surface)}?error=expired`);
