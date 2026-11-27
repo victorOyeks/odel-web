@@ -36,6 +36,10 @@ export function CustomDomainCard({ tenantId, platformUrl, domain }: { tenantId: 
   }
 
   async function save(remove: boolean) {
+    if (!remove && /(\.(test|example|invalid|localhost|local)|(^|\.)example\.(com|org|net))$/i.test(value.trim())) {
+      setMessage({ tone: "bad", text: "Use a real domain the university controls; test domains like .test or example.com can never be reached." });
+      return;
+    }
     setBusy(remove ? "remove" : "save");
     setMessage(null);
     const r = await api("PATCH", `/platform/tenants/${tenantId}`, { webAddress: remove ? "" : value.trim().toLowerCase() });

@@ -523,7 +523,6 @@ export async function mockHandle(req: Request, host: string): Promise<Response> 
       };
       need(b.name, "name", "Enter the university’s full name");
       need(b.shortName, "shortName", "Enter a short name");
-      need(b.webAddress, "webAddress", "Enter the web address");
       need(b.googleDomain, "googleDomain", "Enter the staff Google domain");
       need(b.firstAdmin?.fullName, "firstAdmin.fullName", "Enter the first admin’s name");
       need(b.firstAdmin?.email, "firstAdmin.email", "Enter the first admin’s email");
@@ -541,7 +540,7 @@ export async function mockHandle(req: Request, host: string): Promise<Response> 
           },
         });
       }
-      if (st.tenants.some((t) => (t.webAddress ?? "").toLowerCase() === b.webAddress!.toLowerCase())) return err(409, "web_address_taken", "That web address is taken.");
+      if (b.webAddress && st.tenants.some((t) => (t.webAddress ?? "").toLowerCase() === b.webAddress!.toLowerCase())) return err(409, "web_address_taken", "That web address is taken.");
       if (st.tenants.some((t) => t.slug === b.slug)) return err(409, "slug_taken", "That short address is taken.");
       const t: MockTenant = {
         id: crypto.randomUUID(),

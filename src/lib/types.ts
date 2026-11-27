@@ -139,8 +139,8 @@ export interface TenantListItem {
 }
 
 export interface AddressAvailability {
-  webAddress: { available: boolean; message?: string };
-  slug: { available: boolean; message?: string };
+  webAddress?: { available: boolean; message?: string };
+  slug?: { available: boolean; message?: string };
 }
 
 export interface LogoUpload {
@@ -155,7 +155,7 @@ export interface NewTenant {
   name: string;
   shortName: string;
   slug: string;
-  webAddress: string;
+  webAddress: string | null;
   googleDomain: string;
   branding: { primaryColor: string; accentColor: string; logoKey: string | null };
   firstAdmin: { fullName: string; email: string };

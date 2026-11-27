@@ -37,6 +37,16 @@ type Errors = Partial<Record<keyof Form | "logo", string>>;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HOST_RE = /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
+/** The base of every university's platform address, from the console's own host (odel-console-dev.x.com -> odel-dev.x.com). */
+function platformBase(): string {
+  if (typeof window === "undefined") return "…";
+  const h = window.location.hostname;
+  if (h.startsWith("console.")) return h.slice("console.".length);
+  return h.replace(/-console(?=-|\.)/, "").replace(/^console-/, "");
+}
+
+/** Test and example domains can never have a real DNS record (the API refuses them too). */
+const RESERVED_RE = /(\.(test|example|invalid|localhost|local)|(^|\.)example\.(com|org|net))$/i;
 const SLUG_RE = /^[a-z][a-z0-9-]{1,30}$/;
 
 function suggestSlug(name: string) {
@@ -100,8 +110,9 @@ export function NewUniversity() {
     const e: Errors = {};
     if (!f.name.trim()) e.name = "Enter the university’s full name";
     if (!f.shortName.trim()) e.shortName = "Enter a short name, for example Wesley ODeL";
-    if (!f.webAddress.trim()) e.webAddress = "Enter the web address, for example odl.crestfield.edu.ng";
-    else if (!HOST_RE.test(f.webAddress.trim())) e.webAddress = "Enter an address like odl.crestfield.edu.ng, without https://";
+    if (f.webAddress.trim() && !HOST_RE.test(f.webAddress.trim())) e.webAddress = "Enter an address like odl.crestfield.edu.ng, without https://";
+    else if (f.webAddress.trim() && RESERVED_RE.test(f.webAddress.trim()))
+      e.webAddress = "Use a real domain the university controls; test domains like .test or example.com can never be reached";
     if (!SLUG_RE.test(f.slug)) e.slug = "Use 2–31 lowercase letters, numbers or dashes, starting with a letter";
     if (!f.googleDomain.trim() || !HOST_RE.test(f.googleDomain.trim())) e.googleDomain = "Enter the domain staff emails end with, for example crestfield.edu.ng";
     if (!f.adminName.trim()) e.adminName = "Enter the first admin’s name";
@@ -119,7 +130,8 @@ export function NewUniversity() {
       return;
     }
     setBusy(true);
-    const q = new URLSearchParams({ webAddress: f.webAddress.trim().toLowerCase(), slug: f.slug });
+    const q = new URLSearchParams({ slug: f.slug });
+    if (f.webAddress.trim()) q.set("webAddress", f.webAddress.trim().toLowerCase());
     const r = await api<AddressAvailability>("GET", `/platform/tenants/address-available?${q}`);
     setBusy(false);
     if (!r.ok) {
@@ -127,8 +139,8 @@ export function NewUniversity() {
       return;
     }
     const e2: Errors = {};
-    if (!r.data.webAddress.available) e2.webAddress = r.data.webAddress.message ?? "Already used by another university";
-    if (!r.data.slug.available) e2.slug = r.data.slug.message ?? "Already used by another university";
+    if (r.data.webAddress && !r.data.webAddress.available) e2.webAddress = r.data.webAddress.message ?? "Already used by another university";
+    if (r.data.slug && !r.data.slug.available) e2.slug = r.data.slug.message ?? "Already used by another university";
     if (Object.keys(e2).length) {
       setErrors(e2);
       setTaken(e2.webAddress ? "web" : "slug");
@@ -193,7 +205,7 @@ export function NewUniversity() {
       name: f.name.trim(),
       shortName: f.shortName.trim(),
       slug: f.slug,
-      webAddress: f.webAddress.trim().toLowerCase(),
+      webAddress: f.webAddress.trim() ? f.webAddress.trim().toLowerCase() : null,
       googleDomain: f.googleDomain.trim().toLowerCase(),
       branding: { primaryColor: primaryHex!, accentColor: accentHex!, logoKey: logo?.key ?? null },
       firstAdmin: { fullName: f.adminName.trim(), email: f.adminEmail.trim().toLowerCase() },
@@ -285,8 +297,8 @@ export function NewUniversity() {
             <div className="flex flex-col gap-4">
               <TextField id="f-name" label="Full name" placeholder="Type the university’s full name" value={f.name} onChange={(e) => set("name", e.target.value)} error={errors.name} autoComplete="organization" />
               <TextField id="f-shortName" label="Short name" placeholder="For example: Crestfield ODeL" value={f.shortName} onChange={(e) => set("shortName", e.target.value)} error={errors.shortName} hint="Shown in emails, in the authenticator app and when students install the portal" />
-              <TextField id="f-webAddress" label="Web address" placeholder="For example: odl.crestfield.edu.ng" value={f.webAddress} onChange={(e) => set("webAddress", e.target.value)} error={errors.webAddress} hint={errors.webAddress ? undefined : "We give you the DNS record to add"} inputMode="url" autoCapitalize="none" spellCheck={false} />
-              <TextField id="f-slug" label="Short address" placeholder="For example: crestfield" value={f.slug} onChange={(e) => set("slug", e.target.value.toLowerCase())} error={errors.slug} hint={errors.slug ? undefined : "Used for the test address before the DNS record is ready"} autoCapitalize="none" spellCheck={false} />
+              <TextField id="f-webAddress" label="Own web address (optional)" placeholder="For example: odl.crestfield.edu.ng" value={f.webAddress} onChange={(e) => set("webAddress", e.target.value)} error={errors.webAddress} hint={errors.webAddress ? undefined : "The university’s own domain. Leave empty to start with the platform address; it can be added later"} inputMode="url" autoCapitalize="none" spellCheck={false} />
+              <TextField id="f-slug" label="Short address" placeholder="For example: crestfield" value={f.slug} onChange={(e) => set("slug", e.target.value.toLowerCase())} error={errors.slug} hint={errors.slug ? undefined : `Their platform address: ${f.slug || "short-address"}.${platformBase()} — live as soon as you create the university`} autoCapitalize="none" spellCheck={false} />
             </div>
             <div className="flex flex-col gap-4">
               <TextField id="f-adminName" label="First admin’s name (they set up everything else)" placeholder="Type a name" value={f.adminName} onChange={(e) => set("adminName", e.target.value)} error={errors.adminName} autoComplete="off" />
@@ -407,7 +419,11 @@ export function NewUniversity() {
           <KeyValues
             rows={[
               { label: "University", value: `${f.name.trim()} · ${f.shortName.trim()}` },
-              { label: "Web address", value: `${f.webAddress.trim().toLowerCase()} · DNS record sent after you create it` },
+              { label: "Platform address", value: `${f.slug}.${platformBase()} · live as soon as you create it` },
+              {
+                label: "Own web address",
+                value: f.webAddress.trim() ? `${f.webAddress.trim().toLowerCase()} · we show the DNS record to add after you create it` : "None yet · can be added later",
+              },
               { label: "Staff sign-in", value: `Google accounts ending @${f.googleDomain.trim().toLowerCase()}` },
               {
                 label: "Branding",
