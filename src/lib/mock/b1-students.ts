@@ -720,7 +720,7 @@ export async function studentsRoute(ctx: B1Ctx): Promise<Response | null> {
     const all = deliveries(u, s);
     if (m[2] === "/deliveries") {
       const st = url.searchParams.get("status");
-      return json(200, page(all.filter((d) => !st || d.status === st), url, 50));
+      return json(200, page(all.filter((d) => !st || d.status === st || (st === "SKIPPED" && d.status.startsWith("SKIPPED"))), url, 50));
     }
     return csvResponse("welcome-failed.csv", [
       ["matric_number", "name", "email", "status", "reason"],

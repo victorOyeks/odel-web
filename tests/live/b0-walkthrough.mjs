@@ -3,6 +3,8 @@
 // Positive paths, edge cases and negative cases; each step printed as it passes or fails, a summary at the end.
 import { chromium } from "playwright";
 import { createHmac } from "node:crypto";
+import { mkdirSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 
 const IP = "62.169.21.189";
 const CONSOLE = "https://odel-console-dev.oyeksglobal.com";
@@ -11,7 +13,16 @@ const BASE = "odel-dev.oyeksglobal.com";
 // The provider admin's authenticator secret is never in the repo: pass it in ODEL_E2E_PROVIDER_TOTP.
 const CHUKA = { name: "Chuka Obi", email: "chuka.obi@oyeksglobal.com", secret: process.env.ODEL_E2E_PROVIDER_TOTP ?? "" };
 if (!CHUKA.secret) { console.error("Set ODEL_E2E_PROVIDER_TOTP to the provider admin's authenticator secret."); process.exit(2); }
-// No screenshots: the browser window is the view. On a failure the page address and its visible text are printed.
+// A checkpoint screenshot (viewport only) after each step, numbered, in ~/Desktop/ODeL test screenshots/B0 end to end (<date>)/.
+// On a failure the page address and its visible text are printed too.
+const SHOTS = `${homedir()}/Desktop/ODeL test screenshots/B0 end to end (${new Date().toISOString().slice(0, 10)})`;
+rmSync(SHOTS, { recursive: true, force: true }); mkdirSync(SHOTS, { recursive: true });
+let shots = 0;
+async function shot(page, name) {
+  shots += 1;
+  const file = `${String(shots).padStart(3, "0")} ${name.replace(/[\/:*?"<>|]/g, "-").replace(/\s+/g, " ").slice(0, 90).trim()}.png`;
+  await page.screenshot({ path: `${SHOTS}/${file}` }).catch(() => {});
+}
 
 // ---- two-step codes (RFC 6238), each used once ----
 function b32(s) {
@@ -39,12 +50,14 @@ async function step(page, title, fn, { expect = "pass" } = {}) {
   n += 1; const id = String(n).padStart(2, "0");
   try {
     await fn();
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(1000); // let the person watching see the result
+    await shot(page, title);
     results.push({ id, title, ok: true, expect });
     console.log(`  ✓ ${id} ${title}`);
   } catch (e) {
     const seen = await page.evaluate(() => (document.querySelector("main")?.innerText ?? document.body.innerText).replace(/\s+/g, " ").slice(0, 700)).catch(() => "");
     console.log(`      at ${page.url()}\n      page says: ${seen}`);
+    await shot(page, `FAILED ${title}`);
     results.push({ id, title, ok: false, expect, error: String(e.message).split("\n")[0] });
     console.log(`  ✗ ${id} ${title}\n      ${String(e.message).split("\n")[0]}`);
     throw e;
@@ -56,12 +69,28 @@ async function group(name, fn) {
 }
 
 const browser = await chromium.launch({
-  headless: false, slowMo: Number(process.env.SLOW ?? 300),
-  args: [`--host-resolver-rules=MAP odel-dev.oyeksglobal.com ${IP}, MAP odel-console-dev.oyeksglobal.com ${IP}, MAP *.odel-dev.oyeksglobal.com ${IP}`],
+  headless: false, slowMo: Number(process.env.SLOW ?? 600),
+  args: ["--window-size=1440,900", `--host-resolver-rules=MAP odel-dev.oyeksglobal.com ${IP}, MAP odel-console-dev.oyeksglobal.com ${IP}, MAP *.odel-dev.oyeksglobal.com ${IP}`],
 });
-const desktop = { viewport: { width: 1440, height: 900 } };
-const consoleCtx = await browser.newContext(desktop);
-const c = await consoleCtx.newPage();
+const desktop = { viewport: null };
+// One window for the whole walkthrough: the console and the university keep their own cookies (per host).
+const ctx = await browser.newContext(desktop);
+const page = await ctx.newPage();
+const c = page, a = page;
+const base = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+// Typed the way a person types (short values character by character); long values are filled at once.
+{
+  const proto = Object.getPrototypeOf(page.locator("body"));
+  const fill = proto.fill;
+  proto.fill = async function (value, opts) {
+    const type = await this.evaluate((el) => (el.tagName === "TEXTAREA" ? "textarea" : el.type ?? "")).catch(() => "");
+    if (value && value.length <= 60 && ["text", "email", "search", "password", "tel", "textarea", "number"].includes(type)) {
+      await fill.call(this, "", opts);
+      return this.pressSequentially(value, { delay: 40, ...(opts ?? {}) });
+    }
+    return fill.call(this, value, opts);
+  };
+}
 
 async function signInStub(page, nameOrEmail, { email } = {}) {
   await page.getByText("Continue with university Google account").click();
@@ -80,7 +109,7 @@ async function signOut(page) {
 }
 async function typeCode(page, value) {
   await page.locator('input[inputmode="numeric"]').first().click();
-  await page.keyboard.type(value);
+  await page.keyboard.type(value, { delay: 40 });
 }
 
 const slug = process.env.SLUG ?? "lakeshore";
@@ -156,8 +185,6 @@ await group("B · Provider adds Lakeshore University (SA-02 to SA-05b)", async (
   });
 });
 
-const adminCtx = await browser.newContext(desktop);
-const a = await adminCtx.newPage();
 await group("C · Lakeshore's first admin gets in (W-01 to W-05, W-10)", async () => {
   await step(a, "Lakeshore's own sign-in page, in its colours", async () => { await a.goto(`${UNI}/staff/sign-in`); await a.getByText("Lakeshore University").first().waitFor(); });
   await step(a, "Negative - a personal email outside the staff domain is refused (W-02)", async () => {
@@ -189,7 +216,7 @@ await group("C · Lakeshore's first admin gets in (W-01 to W-05, W-10)", async (
   await step(a, "Phone size - the same checklist on a 390 px screen", async () => {
     await a.setViewportSize({ width: 390, height: 844 }); await a.waitForTimeout(600);
   });
-  await a.setViewportSize({ width: 1440, height: 900 });
+  await a.setViewportSize(base);
 });
 
 await group("D · Signing out and back in (S-04, S-02, W-03)", async () => {
@@ -222,7 +249,9 @@ await group("D · Signing out and back in (S-04, S-02, W-03)", async () => {
 });
 
 await group("E · Universities are kept apart", async () => {
-  await step(a, "Negative - Lakeshore's admin is not signed in on the provider console", async () => { await a.goto(CONSOLE); await a.waitForURL(/\/sign-in/); });
+  await step(a, "Chuka signs out of the console; Lakeshore's admin session does not open it", async () => {
+    await a.goto(CONSOLE); await signOut(a); await a.goto(CONSOLE); await a.waitForURL(/\/sign-in/);
+  });
   await step(a, "Negative - Lakeshore's admin is refused on Wesley's portal", async () => {
     await a.goto(`${WESLEY}/staff/sign-in`); await signInStub(a, "", { email: uni.email }); await a.waitForURL(/error=wrong_domain/);
   });
@@ -231,7 +260,11 @@ await group("E · Universities are kept apart", async () => {
 });
 
 await group("F · Provider sees it all (SA-01b, SA-09)", async () => {
-  await step(c, "Lakeshore's page - invitation accepted", async () => { await c.reload(); await c.getByText(/accepted/i).first().waitFor(); });
+  await step(c, "Chuka signs back in; Lakeshore's page - invitation accepted", async () => {
+    await c.goto(CONSOLE); await signInStub(c, "Chuka Obi"); await c.getByText("Enter your 6-digit code").waitFor();
+    await typeCode(c, await code(CHUKA.secret)); await c.getByRole("button", { name: "Verify" }).click(); await c.getByText(/Wesley University/).first().waitFor();
+    await c.goto(`${CONSOLE}/universities/${uniId}`); await c.getByText(/accepted/i).first().waitFor();
+  });
   await step(c, "Audit trail - creation, sign-ins, failed codes, sign-outs (SA-09)", async () => {
     await c.goto(`${CONSOLE}/audit`); await c.locator("main").getByText(/Bola Ige signed in/).first().waitFor();
     await c.locator("main").getByText(new RegExp(`Created Lakeshore University`)).first().waitFor();

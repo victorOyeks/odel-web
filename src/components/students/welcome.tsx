@@ -228,7 +228,7 @@ function Report({ send, onClose }: { send: WelcomeSend; onClose: () => void }) {
   useEffect(() => {
     Promise.all([
       api<Paged<Delivery>>("GET", `/students/welcome/sends/${send.id}/deliveries?status=FAILED&size=100`),
-      api<Paged<Delivery>>("GET", `/students/welcome/sends/${send.id}/deliveries?status=SKIPPED_NO_EMAIL&size=100`),
+      api<Paged<Delivery>>("GET", `/students/welcome/sends/${send.id}/deliveries?status=SKIPPED&size=100`),
     ]).then(([a, b]) => setFailed([...(a.ok ? a.data.items : []), ...(b.ok ? b.data.items : [])]));
   }, [send.id]);
   return (
@@ -257,13 +257,13 @@ function Report({ send, onClose }: { send: WelcomeSend; onClose: () => void }) {
             {n(t.sent)} of {n(t.toSend + t.skippedNoEmail)} emails delivered
           </p>
           <p className="text-body-sm text-ink-2">
-            {n(t.skippedNoEmail)} students have no email on record{t.skippedActive ? ` · ${n(t.skippedActive)} already active were skipped` : ""}
+            {plural(t.skippedNoEmail, "student has", "students have")} no email on record{t.skippedTestAddress ? ` · ${n(t.skippedTestAddress)} test addresses not sent` : ""}{t.skippedActive ? ` · ${n(t.skippedActive)} already active were skipped` : ""}
           </p>
         </div>
       </div>
       {missed ? (
         <Banner tone="warning" title={`${plural(missed, "student")} did not get the welcome`}>
-          They have no email on record, or the address bounced. Download the list, add or correct the email on each student’s record (Students), and resend the welcome from there.
+          They have no email on record, the address bounced{t.skippedTestAddress ? ", or it is a test address that can never receive mail" : ""}. Download the list, add or correct the email on each student’s record (Students), and resend the welcome from there.
         </Banner>
       ) : null}
       {failed && failed.length ? (
@@ -274,7 +274,7 @@ function Report({ send, onClose }: { send: WelcomeSend; onClose: () => void }) {
           columns={[
             { header: "Student", cell: (d) => `${d.fullName} · ${d.matricNumber}` },
             { header: "Email", cell: (d) => d.email ?? "—" },
-            { header: "Why", cell: (d) => <Badge tone={d.status === "FAILED" ? "danger" : "warning"}>{d.reason ?? (d.status === "FAILED" ? "Failed" : "No email")}</Badge> },
+            { header: "Why", cell: (d) => <Badge tone={d.status === "FAILED" ? "danger" : "warning"}>{d.reason ?? (d.status === "FAILED" ? "Failed" : d.status === "SKIPPED_TEST_ADDRESS" ? "Test address" : "No email")}</Badge> },
           ]}
         />
       ) : null}

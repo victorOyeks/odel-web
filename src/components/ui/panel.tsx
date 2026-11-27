@@ -75,7 +75,7 @@ export function Panel({
         "m-0 h-dvh max-h-none w-full max-w-none bg-surface p-0 text-ink md:shadow-pop",
         variant === "sheet"
           ? "md:ml-auto md:h-dvh md:w-[min(520px,100vw)] md:rounded-none"
-          : cn("md:m-auto md:h-auto md:max-h-[calc(100dvh-48px)] md:w-[calc(100%-48px)] md:rounded-xl", w),
+          : cn("md:m-auto md:h-fit md:max-h-[calc(100dvh-48px)] md:w-[calc(100%-48px)] md:rounded-xl", w),
       )}
     >
       {open ? (

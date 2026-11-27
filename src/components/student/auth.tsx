@@ -402,7 +402,7 @@ function StartStep({
       ) : null}
       {err?.error === "no_email" ? (
         <Banner tone="warning" title="We have no email address for you">
-          {err.message}
+          {err.message?.replace(/^We have no email address for you, so we cannot/, "We cannot")}
           {err.centre?.phone ? (
             <a href={`tel:${err.centre.phone.replace(/\s+/g, "")}`} className="mt-1 flex min-h-12 items-center gap-1 font-semibold text-warning-ink md:min-h-0">
               <Icon name="call" size={16} />
