@@ -52,10 +52,11 @@ function emails(to) {
 }
 const seenMail = new Set();
 /** The newest email to `to` sent after `after` (ms) that matches `test` and was not used before; waits up to 60 seconds. */
-async function waitEmail(to, after, test = () => true, { timeout = 60_000 } = {}) {
+async function waitEmail(to, after, test = () => true, { timeout = 60_000, settled = false } = {}) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
-    const m = emails(to).find((e) => Date.parse(e.created_at) >= after - 5000 && !seenMail.has(to + e.created_at) && test(e));
+    // settled: wait until the email job has decided (SENT / SKIPPED / FAILED), not while it is still QUEUED.
+    const m = emails(to).find((e) => Date.parse(e.created_at) >= after - 5000 && !seenMail.has(to + e.created_at) && test(e) && (!settled || e.status !== "QUEUED"));
     if (m) { seenMail.add(to + m.created_at); return m; }
     await new Promise((r) => setTimeout(r, 1500));
   }
@@ -360,6 +361,7 @@ const PORTAL_NAME = `wesley_portal_export_${RUN}.csv`;
 const ALLOWED_REAL = ["gmail.com", "oyeksglobal.com"]; // the dev allow-list: these really get email
 let belloSecret = null;
 const found = {}; // what this run found on Wesley (codes, ids)
+const RUN_START = Date.now();
 
 const enc = encodeURIComponent;
 const isAllowedReal = (email) => !!email && ALLOWED_REAL.some((d) => email.toLowerCase().endsWith(`@${d}`) || email.toLowerCase().endsWith(`.${d}`));
@@ -469,7 +471,7 @@ await group("W", "Provider console: the add-a-university wizard on a throwaway u
       if (!(await c.locator("main").innerText()).includes(`Live at ${WUNI}`)) throw new Error(`expected "Live at ${WUNI}"`);
     });
     await step(c, "Its first admin's invitation is in the email log (a .test address: recorded, never sent)", async () => {
-      const m = await waitEmail("amaka.eze@wizard.test", Date.now() - 120_000, (e) => /invited/i.test(e.subject));
+      const m = await waitEmail("amaka.eze@wizard.test", Date.now() - 120_000, (e) => /invited/i.test(e.subject), { settled: true });
       if (m.status !== "SKIPPED") throw new Error(`the invitation was ${m.status}`);
     });
   } finally {
@@ -708,7 +710,7 @@ await group("H", "People & roles (W-15, W-15b, W-15c); staff email is held by th
     await step(a, `${pp.name} is on People & roles (invited if missing; the email is recorded, not sent)`, async () => {
       if (!(await person(pp.email))) {
         const t0 = Date.now(); await invite(pp, role, scopeLabel, option); await a.getByText(`Invited ${pp.name}.`).waitFor();
-        const m = await waitEmail(pp.email, t0, (e) => /invited/i.test(e.subject));
+        const m = await waitEmail(pp.email, t0, (e) => /invited/i.test(e.subject), { settled: true });
         if (m.status !== "SKIPPED") throw new Error(`the invitation to ${pp.email} was ${m.status}: the dev allow-list should hold it`);
       }
       await a.goto(`${UNI}/staff/people?search=${enc(pp.email)}`); await a.getByRole("button", { name: pp.name }).first().waitFor();
@@ -843,7 +845,7 @@ await group("K", "Staff accounts: suspend, restore and reset two-step (W-21)", a
     await a.getByText(/Reset Dr Funmi Bello’s two-step sign-in/).first().waitFor(); await a.keyboard.press("Escape");
   });
   await step(b, "His next sign-in asks him to set up two-step again (W-04); his email is recorded, not sent", async () => {
-    const m = await waitEmail(BELLO.email, t0 - 20_000, (e) => /two-step/i.test(e.subject + e.body));
+    const m = await waitEmail(BELLO.email, t0 - 20_000, (e) => /two-step/i.test(e.subject + e.body), { settled: true });
     if (m.status !== "SKIPPED") throw new Error(`the reset email was ${m.status}`);
     await belloSetsUp();
   });
@@ -967,7 +969,7 @@ await group("N", "Welcome emails (W-20, W-20d, W-20c)", async () => {
   });
   await step(a, "Send a test to me: in the log for Ngozi with the new wording, held by the dev allow-list", async () => {
     const t0 = Date.now(); await a.getByRole("button", { name: "Send a test to me" }).click(); await a.getByText(`Sent a test to ${NGOZI.email}.`, { exact: false }).waitFor();
-    const m = await waitEmail(NGOZI.email, t0, (e) => e.body.includes("8am to 4pm"));
+    const m = await waitEmail(NGOZI.email, t0, (e) => e.body.includes("8am to 4pm"), { settled: true });
     if (m.status !== "SKIPPED") throw new Error(`the test email was ${m.status}`); if (!/activate/.test(m.body)) throw new Error("no activation link in it");
   });
   await step(a, "Send to everyone with an email (after checking none is a real address): progress, then the delivery report (W-20c)", async () => {
@@ -1174,11 +1176,20 @@ await group("S", "The university's audit log", async () => {
   await step(a, "The student's suspension and password resets", async () => {
     await has("STUDENTS", new RegExp(`suspended ${P.name} \\(${m}\\)`)); await has("STUDENTS", new RegExp(`${P.name} chose a new password with an emailed code`));
   });
-  await step(a, "Dr Bello's suspension and two-step reset", async () => { await has("ROLES", /Suspended Dr Funmi Bello: On leave from 1 Dec/); await has("SIGN_IN", /Reset Dr Funmi Bello's two-step sign-in: Lost phone/); });
+  await step(a, "Dr Bello's suspension and two-step reset", async () => {
+    // Many sign-ins in one run push older entries off the first page: ask for these actions directly.
+    for (const [action, re] of [["STAFF_SUSPENDED", /Suspended Dr Funmi Bello: On leave from 1 Dec/], ["MFA_RESET", /Reset Dr Funmi Bello's two-step sign-in: Lost phone/]]) {
+      const items = (await W(`/audit?action=${action}&size=10`)).body.items;
+      if (!items.some((x) => re.test(x.summary))) throw new Error(`no ${action} entry matching ${re}`);
+    }
+    await has("ROLES", /Suspended Dr Funmi Bello/);
+  });
   await step(a, "Entries carry the person's own IP address, not the server's", async () => {
     await a.goto(`${UNI}/staff/reports/audit`);
-    const local = (await W("/audit?size=50")).body.items.filter((x) => /^(127\.|::1$|0:0:0:0:0:0:0:1$)/.test(x.ip ?? ""));
-    if (local.length) throw new Error(`entries with the server's own IP: ${[...new Set(local.map((x) => `${x.action}: ${x.summary.slice(0, 60)}`))].join(" | ")}`);
+    const mine = (await W("/audit?size=200")).body.items.filter((x) => Date.parse(x.at) >= RUN_START - 60_000); // this run's entries only
+    if (!mine.length) throw new Error("no audit entries from this run");
+    const local = mine.filter((x) => /^(127\.|::1$|0:0:0:0:0:0:0:1$)/.test(x.ip ?? ""));
+    if (local.length) throw new Error(`entries with the server's own IP: ${[...new Set(local.map((x) => `${x.at} ${x.action}: ${x.summary.slice(0, 60)}`))].join(" | ")}`);
   });
 });
 
