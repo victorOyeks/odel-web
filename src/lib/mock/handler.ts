@@ -364,7 +364,7 @@ export async function mockHandle(req: Request, host: string): Promise<Response> 
       }
       if (path === "/auth/mfa/backup") {
         session.backupLeft -= 1;
-        return json(200, { ...sessionBody(session), backupCodesLeft: session.backupLeft });
+        return json(200, { session: sessionBody(session), backupCodesLeft: session.backupLeft });
       }
       return json(200, sessionBody(session));
     }

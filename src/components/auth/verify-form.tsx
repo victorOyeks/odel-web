@@ -34,12 +34,14 @@ export function VerifyForm({ issuer, surface, next }: { issuer: string; surface:
       return;
     }
     setBusy(true);
+    // /auth/mfa/verify answers with the session; /auth/mfa/backup with { session, backupCodesLeft }.
     const res =
       mode === "code"
         ? await api<Session>("POST", "/auth/mfa/verify", { code, trustDevice: trust })
-        : await api<Session>("POST", "/auth/mfa/backup", { code: backup.trim(), trustDevice: trust });
+        : await api<{ session: Session; backupCodesLeft: number }>("POST", "/auth/mfa/backup", { code: backup.trim(), trustDevice: trust });
     if (res.ok) {
-      hardNavigate(pathForStage(res.data.stage, surface, next));
+      const session = "session" in res.data ? res.data.session : res.data;
+      hardNavigate(pathForStage(session.stage, surface, next));
       return;
     }
     setBusy(false);
