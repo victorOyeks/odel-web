@@ -1,4 +1,4 @@
-# Routes (B0 Platform base)
+# Routes (B0 Platform base, B1 Set up a session and let students in)
 
 Figma files: **03 Staff Web** `JTrDKm6sW4Zc3xLtiF5Abn`, **02 Student Web** `oYPXI3kMCgPu5ZKDhehy7J`, **01 Student Mobile** `BdgcGOz6MmsQAdQ3JcOiwK`, **00 Design System** `JS7iHUa012ezAnsVeuQKjd`.
 
@@ -8,8 +8,12 @@ Status: **Built** = matches the frame and talks to the contract; **Adapted** = b
 
 | Route | Screen | Figma | Status |
 |---|---|---|---|
-| `/` | Student home: "Student portal opens soon" | — | Placeholder (student sign-in arrives in B1) |
-| `/courses`, `/classes`, `/exams`, `/results`, `/payments`, … | Student menu destinations | — | Placeholder ("… opens soon") |
+| `/` (signed out) | M-01 Welcome: Activate my account / Sign in | 02 · D1 flow A M-01 | Built (paused university: "portal is paused") |
+| `/` (student signed in) | B1 Home: name, matric, programme, level, centre, "Your courses appear after registration" | — (B2/B3 Home later) | Adapted: honest B1 Home, no fake courses or fees |
+| `/sign-in` | M-08 Sign in (matric or email + password, keep me signed in), E-04 wrong password, E-05 locked with the time, E-06 suspended, S-02 signed out | 02/01 · D1 flow B, C | Built |
+| `/activate`, `/activate?matric=…` | M-02 matric (or email) → M-03 6-digit code (resend wait, M-03b wrong code, E-03 can't access this email) → M-04 password with live rules → M-05 privacy notice → M-06 check your details; E-01 not found, E-02 already active, no email, too many codes | 02/01 · D1 flow A | Adapted: M-06 centre and email read-only (API allows only the phone) |
+| `/reset-password`, `?login=…&sent=1` | M-09 → M-03R code → M-11 new password ("Save and sign in") | 02/01 · D1 flow B | Adapted: M-10 "We'll email you a code" is folded into M-09 (the API sends the code on start, so the masked email is shown on the code screen) |
+| `/courses`, `/classes`, `/exams`, `/results`, `/payments`, … | Student menu destinations | — | Placeholder; inside the student shell when signed in ("… opens soon") |
 | `/staff/sign-in` | W-01 Google sign-in | 03 · 2:355 | Built |
 | `/staff/sign-in?error=not_linked\|wrong_domain\|no_role` | W-02 Account not linked (+ variants) | 03 · 2:376 | Adapted: no "Email the ODeL office" button (no office email in the contract) |
 | `/staff/sign-in?error=suspended\|university_suspended\|cancelled\|expired\|too_many_attempts` | W-01 with a banner per error | 03 · 2:355 | Built (copy written for B0) |
@@ -20,8 +24,21 @@ Status: **Built** = matches the frame and talks to the contract; **Adapted** = b
 | `/staff/sign-in/role` | W-06 Choose role | 03 · 2:592 | Built |
 | `/auth/continue` | Routes by session stage | — | Built |
 | `/staff` | Staff home | — | ODeL admin → `/staff/setup`; other roles: placeholder dashboard |
-| `/staff/setup` | W-10 Setup checklist, day-one empty state | 03 · 3:304, D10 SA-05c 290:13835 | Built |
-| `/staff/*` (Students, Payments, Registration, Courses, Centres, People & roles, Academic setup, Reports, Help, Settings, checklist step links) | "… is coming in a later phase" | — | Placeholder |
+| `/staff/setup` | W-10 Setup checklist from real data: status, summary, percent, locked reason, Start/Continue/Edit/Review | 03 · 3:304 | Built |
+| `/staff/academic-setup` | → Sessions tab | — | Redirect |
+| `/staff/academic-setup/sessions` | W-11 sessions list; sheet W-11c new / W-11b edit (Save draft, Save and make active); make active; delete a draft | 03 · 3:644, 348:23327, 197:5010 | Built (late-registration close and a second-semester window added: both in the contract) |
+| `/staff/academic-setup/structure?sel=faculty:…\|department:…\|programme:…` | W-12 tree + right panel (programme, department W-12e, faculty), add/edit faculty, department, programme (W-12d … W-12j), W-12c CSV import with row report | 03 · 4:710, 101:2430, 177:3551, 177:3841, 178:3855, 178:4127, 348:23391, 348:23536, 348:23681, 101:2805 | Built |
+| `/staff/academic-setup/staffing`, `?tab=centres` | W-16 courses / centres, W-16b who teaches (lecturer, one facilitator per centre, exam officer, email them), W-16c coordinator, W-16d copy from last session (copied + skipped list), W-16e before import banner | 03 · 5:1777, 200:5673, 184:4243, 200:5881, 321:7961 | Built |
+| `/staff/academic-setup/grading`, `?programmeId=` | W-17 rules, W-17b edit bands, W-17c weights/bands checked while typing (Save disabled, the API refuses too), W-17d a programme's own rules / use the default again, W-17e standing and degree class | 03 · 5:1976, 206:6425, 206:6948, 205:6041, 205:6313 | Built |
+| `/staff/courses` | W-13 catalogue with search, programme, level, semester, lecturer filters and pages; W-13b add / W-13e edit (W-13d choose programmes, core or elective); W-13c CSV import; Export (rows on screen) | 03 · 4:1015, 101:3151, 191:5045, 348:23826, 101:3518 | Adapted: "Content" column and "Short description" left out (B3; not in the contract) |
+| `/staff/centres`, `?centre=…` | W-14 centres with status, W-14b centre profile sheet (address, coordinator, phone, rooms), W-14c add centre, W-14d add/edit/remove room | 03 · 4:1332, 197:5256, 197:5533, 197:5768 | Built |
+| `/staff/people`, `?person=…` | W-15 people & roles (search, role, status), W-15b invite with scoped roles, W-15c bulk invite CSV, person sheet: edit roles, resend invitation, reset two-step, W-21 suspend (warnings from the suspend check, reason) / restore | 03 · 5:1246, 191:4477, 191:4776, 5:1554 | Built |
+| `/staff/reports` | Reports index (audit log; others later) | — | Built |
+| `/staff/reports/audit` | University audit log: type and date filters, pages, export of the page | console SA-09 148:993 style | Built |
+| `/staff/students`, `?student=…` | W-22 list (search, programme, level, centre, status), W-22b record sheet (edit, resend welcome, send reset code, suspend / restore, consent, history), W-22c add a student | 03 · 210:7084, 210:7325, 210:7587 | Adapted: W-22c has first name + surname (API takes them separately); the centre is a select (the API allows it until B2's move flow) |
+| `/staff/students/import`, `?importId=…` | W-18 upload (drag and drop), W-19 row report (ready / errors / warnings, problems with "Show all", problem rows CSV, upload a fixed file), confirm, done; W-18b history sheet | 03 · 6:1864, 6:2061, 101:3847 | Built (CSV only; an Excel file gets "save as CSV UTF-8") |
+| `/staff/students/welcome` | W-20 preview, W-20d wording editor (insert a field, live preview, test send of unsaved text, default wording), test send, send with progress (polls every 2 s), W-20c delivery report and failed list | 03 · 6:2318, 216:7631, 216:7808 | Adapted: the button counts students with an email ("Send to N"), the rest are listed as skipped |
+| `/staff/*` (Payments, Registration, Help, Settings) | "… is coming in a later phase" | — | Placeholder |
 | Staff shell | Side menu + top bar, drawer below 1024 px | 03 · W-10 3:304 | Built |
 | Role switcher (side menu) | S-03 Role switcher open | 03 · 3:918 | Built |
 | Idle dialog (any staff page) | S-01 Are you still there? | 03 · 3:1043 | Built |

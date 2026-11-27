@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { apiGet } from "@/lib/api/server";
 import { expectSession } from "@/lib/guard";
 import type { CoursePage, StaffOption, Structure } from "@/lib/types-b1";
+import { AdminOnly } from "@/components/staff/admin-only";
 import { LoadFailed } from "@/components/staff/load-state";
 import { CoursesView } from "@/components/academic/courses";
 
@@ -22,5 +23,9 @@ export default async function CoursesPage({ searchParams }: PageProps<"/staff/co
   ]);
   if (!res.ok) return <LoadFailed result={res} what="the course catalogue" />;
   const programmes = structure.ok ? structure.data.faculties.flatMap((f) => f.departments.flatMap((d) => d.programmes)) : [];
-  return <CoursesView data={res.data} filters={filters} programmes={programmes} lecturers={lecturers.ok ? lecturers.data.items : []} />;
+  return (
+    <AdminOnly>
+      <CoursesView data={res.data} filters={filters} programmes={programmes} lecturers={lecturers.ok ? lecturers.data.items : []} />
+    </AdminOnly>
+  );
 }
