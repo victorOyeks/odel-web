@@ -112,7 +112,7 @@ function SemesterPanel({ fee, reg }: { fee: Fee; reg: RegMe | null }) {
   const items = [
     regLine,
     { icon: r ? ("menu_book" as const) : ("lock" as const), done: !!r, title: "Courses and materials", body: r ? "Your courses open as lecturers publish them." : "Available after you register", href: null, link: null },
-    { icon: paid ? ("assignment" as const) : ("lock" as const), done: paid, title: "Exams", body: paid ? "You can sit this semester's exams once you are registered." : "You need to pay to take exams", href: null, link: null },
+    { icon: paid ? ("assignment" as const) : ("lock" as const), done: paid, title: "Exams", body: paid ? (r ? "You can sit this semester's exams." : "You can sit this semester's exams once you are registered.") : "You need to pay to take exams", href: null, link: null },
   ];
   return (
     <section aria-labelledby="semester" className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 sm:p-5">

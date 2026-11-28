@@ -56,7 +56,7 @@ export function FeeCard({ fee, registerHref, compact }: { fee: Fee; registerHref
 
       {fee.status === "PAID" && fee.paidPayment ? (
         <p className="text-body-sm text-ink-2">
-          {fee.paidPayment.methodLabel} · reference <span className="font-mono">{fee.paidPayment.reference}</span>
+          {fee.paidPayment.methodLabel} · reference <span className="whitespace-nowrap font-mono">{fee.paidPayment.reference}</span>
         </p>
       ) : null}
 
