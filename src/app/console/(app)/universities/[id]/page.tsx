@@ -14,6 +14,8 @@ import { KeyValues } from "@/components/console/kv";
 import { statusLabel } from "@/components/console/status-badge";
 import { ResendInvitation } from "@/components/console/resend-invitation";
 import { CustomDomainCard } from "@/components/console/custom-domain-card";
+import { PaymentsCard } from "@/components/console/payments-card";
+import type { UniversityPayments } from "@/lib/types-b2";
 
 export const metadata: Metadata = { title: "University" };
 
@@ -31,7 +33,10 @@ export default async function UniversityPage({ params, searchParams }: PageProps
   const { id } = await params;
   const sp = await searchParams;
   const created = sp.created === "1";
-  const res = await expectSession(await apiGet<TenantDetail>(`/platform/tenants/${encodeURIComponent(id)}`));
+  const [res, pay] = await Promise.all([
+    apiGet<TenantDetail>(`/platform/tenants/${encodeURIComponent(id)}`).then(expectSession),
+    apiGet<UniversityPayments>(`/platform/payments/universities/${encodeURIComponent(id)}`),
+  ]);
 
   if (!res.ok) {
     return (
@@ -68,6 +73,11 @@ export default async function UniversityPage({ params, searchParams }: PageProps
     return (
       <>
         <PageHeader title={`${t.name} is set up`} subtitle={`Created ${formatWhen(t.createdAt)}${by}.`} />
+        {sp.payments === "failed" ? (
+          <Banner tone="warning" title="The payment settings were not saved">
+            The university is created, but its fee or settlement account did not save (a verified account is good for 15 minutes). Open the university page and set them in Payments.
+          </Banner>
+        ) : null}
         <section aria-labelledby="next-steps" className="flex flex-col gap-2.5 rounded-lg border border-line bg-surface p-5">
           <h2 id="next-steps" className="text-overline text-ink-2">
             Next steps
@@ -132,6 +142,7 @@ export default async function UniversityPage({ params, searchParams }: PageProps
         ]}
       />
       <CustomDomainCard tenantId={t.id} platformUrl={t.platformUrl} domain={t.customDomain} />
+      <PaymentsCard tenantId={t.id} initial={pay.ok ? pay.data : null} />
       {t.status === "SETTING_UP" ? (
         <Banner tone="info" title={`${t.name.split(" ")[0]} goes live when ${admin?.fullName ?? "the first admin"} accepts the invitation and finishes the setup checklist.`}>
           Until then students cannot sign in.

@@ -2,7 +2,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { getContext, getSession } from "@/lib/api/server";
 import { getPath, getSurface } from "@/lib/request";
-import { signInPath, type Surface } from "@/lib/host";
+import { publicNext, signInPath, type Surface } from "@/lib/host";
 import type { ApiResult } from "@/lib/api/result";
 import type { PublicContext, Session } from "@/lib/types";
 import { pathForStage } from "@/components/auth/routing";
@@ -13,8 +13,8 @@ export async function requireSignedIn(): Promise<{ session: Session; ctx: Public
   const path = await getPath();
   const [ctx, session] = await Promise.all([getContext(), getSession()]);
   if (!ctx.ok) throw new Error("context unavailable");
-  if (!session) redirect(`${signInPath(surface)}?next=${encodeURIComponent(path)}`);
-  if (session.stage !== "SIGNED_IN") redirect(pathForStage(session.stage, surface, path));
+  if (!session) redirect(`${signInPath(surface)}?next=${encodeURIComponent(publicNext(path, surface))}`);
+  if (session.stage !== "SIGNED_IN") redirect(pathForStage(session.stage, surface, publicNext(path, surface)));
   return { session, ctx: ctx.data, surface };
 }
 
@@ -23,7 +23,7 @@ export async function expectSession<T>(result: ApiResult<T>): Promise<ApiResult<
   if (!result.ok && result.status === 401) {
     const surface = await getSurface();
     const path = await getPath();
-    redirect(`${signInPath(surface)}?reason=idle&next=${encodeURIComponent(path)}`);
+    redirect(`${signInPath(surface)}?reason=idle&next=${encodeURIComponent(publicNext(path, surface))}`);
   }
   return result;
 }

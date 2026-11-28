@@ -78,6 +78,7 @@ export const STAFF_FOOTER: NavItem[] = [
 /** Provider console menu (D10). Universities and the audit trail are built in B0. */
 export const CONSOLE_NAV: NavItem[] = [
   { label: "Universities", href: "/", icon: "account_balance", also: ["/universities"] },
+  { label: "Settlement", href: "/settlement", icon: "payments" },
   { label: "Platform health", href: "/health", icon: "monitor_heart" },
   { label: "Feature switches", href: "/features", icon: "toggle_on" },
   { label: "Support view", href: "/support", icon: "support_agent" },

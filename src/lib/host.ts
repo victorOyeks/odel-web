@@ -28,3 +28,14 @@ export function safeNext(next: string | null | undefined, fallback: string): str
   if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return fallback;
   return next;
 }
+
+/**
+ * The `next` to put on a sign-in redirect: always a public path of this host. On the console the internal
+ * `/console` prefix never leaks, and staff-web or sign-in paths (not pages of the console) become `/`.
+ */
+export function publicNext(path: string, surface: Surface): string {
+  if (surface !== "console") return /^\/(staff\/)?sign-in(\/|\?|$)/.test(path) ? (path.startsWith("/staff") ? "/staff" : "/") : path;
+  const p = path.replace(/^\/console(?=\/|\?|$)/, "") || "/";
+  if (/^\/(staff(\/|\?|$)|sign-in(\/|\?|$))/.test(p)) return "/";
+  return p.startsWith("/") ? p : `/${p}`;
+}

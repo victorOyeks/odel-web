@@ -12,6 +12,10 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { TextField } from "@/components/ui/text-field";
 import { KeyValues } from "./kv";
+import { SettlementAccountForm } from "./payments-card";
+import { Checkbox } from "@/components/ui/fields";
+import { naira } from "@/lib/format";
+import type { ResolvedAccount } from "@/lib/types-b2";
 
 type Step = 1 | 2 | 3 | 4;
 const STEPS: { n: Step; label: string }[] = [
@@ -84,6 +88,10 @@ export function NewUniversity() {
   const [logo, setLogo] = useState<{ key: string; name: string; previewUrl: string | null } | null>(null);
   const [uploading, setUploading] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const [fee, setFee] = useState({ amount: "15000", share: "3000" });
+  const [feeErr, setFeeErr] = useState<{ amount?: string; share?: string; account?: string }>({});
+  const [account, setAccount] = useState<ResolvedAccount | null>(null);
+  const [accountOk, setAccountOk] = useState(false);
 
   function set<K extends keyof Form>(k: K, v: string) {
     touched.current.add(k);
@@ -221,7 +229,10 @@ export function NewUniversity() {
     };
     const r = await api<TenantDetail>("POST", "/platform/tenants", body);
     if (r.ok) {
-      router.push(`/universities/${r.data.id}?created=1`);
+      // Payment settings need the new university's id, so they are saved right after it is created.
+      const feeSaved = await api("PUT", `/platform/payments/universities/${r.data.id}`, { amount: Number(fee.amount), centreShare: Number(fee.share) });
+      const accSaved = account && accountOk ? await api("PUT", `/platform/payments/universities/${r.data.id}/settlement-account`, { resolutionId: account.resolutionId, confirmedAccountName: account.accountName }) : { ok: true };
+      router.push(`/universities/${r.data.id}?created=1${feeSaved.ok && accSaved.ok ? "" : "&payments=failed"}`);
       return;
     }
     setBusy(false);
@@ -272,7 +283,7 @@ export function NewUniversity() {
   const subtitle = {
     1: "Step 1 of 4 · nothing is live until you create it on the last step.",
     2: "Step 2 of 4 · students see this on the web, in emails and on printed slips.",
-    3: "Step 3 of 4 · the university starts with the default rules.",
+    3: "Step 3 of 4 · the platform fee and where the university's share is paid.",
     4: "Step 4 of 4 · check everything, then create the university.",
   }[step];
   const title = step === 2 && f.name ? `Branding for ${f.name}` : "Add a university";
@@ -412,20 +423,62 @@ export function NewUniversity() {
       ) : null}
 
       {step === 3 ? (
-        <div className="flex flex-col gap-6">
-          <Banner tone="info" title="Defaults for now; the university’s admin sets these">
-            The university starts on the default 5-point grading scale (30% coursework, 70% exam) and pays through the
-            platform. Its ODeL admin reviews rules and payments from the setup checklist.
+        <form
+          noValidate
+          className="flex flex-col gap-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const a = Number(fee.amount);
+            const sh = Number(fee.share);
+            const err: typeof feeErr = {};
+            if (!(a >= 1000 && a <= 1_000_000)) err.amount = "Enter a fee from ₦1,000 to ₦1,000,000.";
+            if (!(fee.share !== "" && sh >= 0 && sh <= a)) err.share = "The centre's share must be from ₦0 up to the fee.";
+            if (account && !accountOk) err.account = "Tick the box to confirm the account name, or clear the account to set it later.";
+            setFeeErr(err);
+            if (!Object.keys(err).length) go(4);
+          }}
+        >
+          <Banner tone="info" title="Grading starts on the defaults">
+            The 5-point scale, 30% coursework and 70% exam. The university&apos;s ODeL admin reviews the academic rules from the setup checklist.
           </Banner>
+          <section aria-labelledby="fee-h" className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 sm:p-5">
+            <h2 id="fee-h" className="text-h4 text-ink">
+              Platform fee
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextField label="Fee per student per semester (₦)" inputMode="numeric" value={fee.amount} onChange={(e) => setFee((x) => ({ ...x, amount: e.target.value.replace(/\D/g, "") }))} error={feeErr.amount} />
+              <TextField label="ODeL centre's share (₦)" inputMode="numeric" value={fee.share} onChange={(e) => setFee((x) => ({ ...x, share: e.target.value.replace(/\D/g, "") }))} error={feeErr.share} />
+            </div>
+            <p className="text-body-sm text-ink-2">
+              Provider&apos;s share {naira(Math.max(0, Number(fee.amount) - Number(fee.share)))} per payment; Paystack&apos;s charge comes out of it. Only the provider sees this split.
+            </p>
+          </section>
+          <section aria-labelledby="acc-h" className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 sm:p-5">
+            <h2 id="acc-h" className="text-h4 text-ink">
+              Settlement account (optional now)
+            </h2>
+            <p className="text-body text-ink-2">The ODeL centre&apos;s share goes here through a Paystack subaccount. Students cannot pay until it is set; you can also set it later on the university page.</p>
+            <SettlementAccountForm
+              resolved={account}
+              onResolved={(r) => {
+                setAccount(r);
+                setAccountOk(false);
+              }}
+            />
+            {account ? (
+              <Checkbox label={`${account.accountName} is the university's ODeL account`} checked={accountOk} onChange={(e) => setAccountOk(e.target.checked)} hint="It is saved when you create the university (within 15 minutes of verifying)." />
+            ) : null}
+            {feeErr.account ? <p className="text-body-sm text-danger">{feeErr.account}</p> : null}
+          </section>
           <Actions>
             <Button type="button" variant="ghost" onClick={() => go(2)}>
               Back
             </Button>
-            <Button type="button" leadingIcon="arrow_forward" onClick={() => go(4)}>
+            <Button type="submit" leadingIcon="arrow_forward">
               Next: review
             </Button>
           </Actions>
-        </div>
+        </form>
       ) : null}
 
       {step === 4 ? (
@@ -447,7 +500,10 @@ export function NewUniversity() {
                   </span>
                 ),
               },
-              { label: "Rules and payments", value: "Defaults · the university’s admin sets these" },
+              {
+                label: "Rules and payments",
+                value: `Default grading · ${naira(Number(fee.amount))} per semester, ${naira(Number(fee.share))} to the ODeL centre · ${account && accountOk ? `account ${account.bankName} ${account.accountNumberMasked}, ${account.accountName}` : "settlement account set later"}`,
+              },
               { label: "First admin", value: `${f.adminName.trim()} · ${f.adminEmail.trim().toLowerCase()} · invitation sent when you create it` },
               { label: "Data", value: "Separate tenant · no data shared with other universities" },
             ]}
