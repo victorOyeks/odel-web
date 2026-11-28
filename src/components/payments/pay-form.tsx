@@ -104,7 +104,7 @@ export function PayForm({ fee }: { fee: Fee }) {
           Payments go through Paystack. We never see your card details. Your fee is marked paid only when your bank confirms the payment.
         </p>
       </form>
-      <aside aria-label="Summary" className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+      <aside aria-label="Summary" className="order-first flex flex-col gap-3 lg:order-none rounded-lg border border-line bg-surface p-5">
         <h2 className="text-h4 text-ink">Payment summary</h2>
         <dl className="flex flex-col gap-2 text-body">
           <div className="flex justify-between gap-3">

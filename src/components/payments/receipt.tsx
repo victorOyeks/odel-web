@@ -51,7 +51,7 @@ export function Receipt({ tenant, profile, p }: { tenant: PublicTenant; profile:
             <p className="text-body-sm text-ink-2">Directorate of Distance &amp; E-learning</p>
           </div>
         </header>
-        <h1 className="text-h3 text-ink">Platform fee receipt · {p.amountLabel}.00</h1>
+        <h1 className="text-h3 text-ink">Platform fee receipt · {p.charge?.studentPays && !p.charge.estimate ? `${p.charge.totalLabel} paid` : `${p.amountLabel}.00`}</h1>
         <dl className="grid grid-cols-[minmax(110px,auto)_1fr] gap-x-6 gap-y-2 text-body">
           {rows.map(([k, v]) => (
             <div key={k} className="contents">
