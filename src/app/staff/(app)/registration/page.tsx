@@ -122,7 +122,8 @@ export default async function RegistrationReportPage({ searchParams }: PageProps
               { header: "Matric no.", cell: (x) => <span className="font-mono">{x.matricNumber}</span> },
               { header: "Programme · level", cell: (x) => `${x.programme?.name ?? "—"}${x.level ? ` · ${x.level}L` : ""}` },
               { header: "Centre", cell: (x) => x.centre?.name ?? "—" },
-              { header: "Units", cell: (x) => (x.units !== null ? `${x.units} (${x.courseCount} courses)` : "—"), numeric: true },
+              { header: "Courses", cell: (x) => (x.courseCount !== null ? String(x.courseCount) : "—"), numeric: true },
+              { header: "Units", cell: (x) => (x.units !== null ? String(x.units) : "—"), numeric: true },
               { header: "Submitted", cell: (x) => formatShort(x.submittedAt), className: "whitespace-nowrap" },
               {
                 header: "Status",
