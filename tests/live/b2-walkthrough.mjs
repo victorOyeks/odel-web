@@ -19,7 +19,7 @@ import { createHmac } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { inflateSync } from "node:zlib";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 
 const IP = "62.169.21.189";
 const CONSOLE = "https://odel-console-dev.oyeksglobal.com";
@@ -54,10 +54,31 @@ async function code(secret) {
   }
 }
 
-// ---- the dev email log (read with curl: this Mac's DNS cannot resolve the dev hosts) ----
-function emails(to) {
-  const out = execFileSync("curl", ["-s", "--resolve", `odel-console-dev.oyeksglobal.com:443:${IP}`, `${CONSOLE}/api/v1/dev/emails?to=${encodeURIComponent(to)}`]).toString();
-  return JSON.parse(out).sort((x, y) => Date.parse(y.created_at) - Date.parse(x.created_at));
+// ---- the dev email log (read with curl: this Mac's DNS cannot resolve the dev hosts). Only a signed-in platform admin may read it,
+// so the script keeps its own console session for Chuka in a cookie jar (dev Google stand-in, then his two-step code). ----
+const MAIL_JAR = `${tmpdir()}/odel-walkthrough-mail-${process.pid}.jar`;
+let mailSignedIn = false;
+function curl(args) {
+  return execFileSync("curl", ["-s", "--resolve", `odel-console-dev.oyeksglobal.com:443:${IP}`, "-b", MAIL_JAR, "-c", MAIL_JAR, ...args]).toString();
+}
+async function mailSignIn() {
+  const start = curl(["-o", "/dev/null", "-w", "%{redirect_url}", `${CONSOLE}/api/v1/auth/google/start?returnTo=%2F`]);
+  const state = start.slice(start.indexOf("state=") + 6);
+  const handoff = curl(["-o", "/dev/null", "-w", "%{redirect_url}", "--data-urlencode", `state=${state}`, "--data-urlencode", `email=${CHUKA.email}`, `${CONSOLE}/api/v1/auth/dev/google`]);
+  curl(["-o", "/dev/null", handoff]);
+  curl(["-o", "/dev/null", `${CONSOLE}/api/v1/public/context`]);
+  const xsrf = (readFileSync(MAIL_JAR, "utf8").split("\n").find((l) => l.includes("\tXSRF-TOKEN\t")) ?? "").split("\t").pop();
+  const ok = curl(["-o", "/dev/null", "-w", "%{http_code}", "-H", "Content-Type: application/json", "-H", `X-XSRF-TOKEN: ${xsrf}`,
+    "-d", JSON.stringify({ code: await code(CHUKA.secret), trust: false }), `${CONSOLE}/api/v1/auth/mfa/verify`]);
+  if (ok !== "200") throw new Error(`the dev email log sign-in failed (${ok})`);
+  mailSignedIn = true;
+}
+async function emails(to) {
+  if (!mailSignedIn) await mailSignIn();
+  let out = curl(["-w", "\n%{http_code}", `${CONSOLE}/api/v1/dev/emails?to=${encodeURIComponent(to)}`]);
+  if (out.endsWith("\n401") || out.endsWith("\n403")) { mailSignedIn = false; await mailSignIn(); out = curl(["-w", "\n%{http_code}", `${CONSOLE}/api/v1/dev/emails?to=${encodeURIComponent(to)}`]); }
+  const body = out.slice(0, out.lastIndexOf("\n"));
+  return JSON.parse(body).sort((x, y) => Date.parse(y.created_at) - Date.parse(x.created_at));
 }
 const seenMail = new Set();
 /** The newest email to `to` sent after `after` (ms) that matches `test` and was not used before; waits up to 60 seconds. */
@@ -65,7 +86,7 @@ async function waitEmail(to, after, test = () => true, { timeout = 60_000, settl
   const end = Date.now() + timeout;
   while (Date.now() < end) {
     // settled: wait until the email job has decided (SENT / SKIPPED / FAILED), not while it is still QUEUED.
-    const m = emails(to).find((e) => Date.parse(e.created_at) >= after - 5000 && !seenMail.has(to + e.created_at) && test(e) && (!settled || e.status !== "QUEUED"));
+    const m = (await emails(to)).find((e) => Date.parse(e.created_at) >= after - 5000 && !seenMail.has(to + e.created_at) && test(e) && (!settled || e.status !== "QUEUED"));
     if (m) { seenMail.add(to + m.created_at); return m; }
     await new Promise((r) => setTimeout(r, 1500));
   }
@@ -828,7 +849,7 @@ await group("P", `${STU.name} pays: declined, closed, transfer and USSD shown, t
     await s.goto(`${UNI}/payments/pay`); await s.waitForURL(/\/payments$/);
   });
   await step(s, "The receipt email went out with the PDF attached (dev email log)", async () => {
-    const m = emails(STU.email).find((e) => /receipt/i.test(e.subject + e.body) && (e.body + e.subject).includes(paidRef));
+    const m = (await emails(STU.email)).find((e) => /receipt/i.test(e.subject + e.body) && (e.body + e.subject).includes(paidRef));
     if (!m) throw new Error("no receipt email for this payment");
     console.log(`      email: "${m.subject}" · ${m.status} · attachments: ${String(m.attachments).slice(0, 120)}`);
     if (!/receipt-WU-PF-\d+\.pdf|\.pdf/.test(String(m.attachments))) throw new Error("the receipt email has no PDF attached");
@@ -925,7 +946,7 @@ await group("R", `${STU.name} registers 7 courses, 18 units (R-02 … R-05); the
     if (r.status !== 409 || r.body?.message !== "You have already registered for this semester. Ask for a course change instead.") throw new Error(`answered ${r.status} ${JSON.stringify(r.body)}`);
   });
   await step(s, "The confirmation email went out with the slip link (dev email log)", async () => {
-    const m = emails(STU.email).find((e) => (e.subject + e.body).includes(slip.slipNumber));
+    const m = (await emails(STU.email)).find((e) => (e.subject + e.body).includes(slip.slipNumber));
     if (!m) throw new Error("no registration email with the slip number");
     console.log(`      email: "${m.subject}" · ${m.status}`);
   });
@@ -1015,7 +1036,7 @@ await group("C", `${STU.name} asks to swap an elective (R-09); the centre's coor
     await s.getByText("History").click(); await expectText(new RegExp(`Drop(ped)? ${drop}, add(ed)? ${add}`));
   });
   await step(s, "The change-approved email went out (dev email log)", async () => {
-    const m = emails(STU.email).find((e) => /approved/i.test(e.subject + e.body) && (e.subject + e.body).includes(add));
+    const m = (await emails(STU.email)).find((e) => /approved/i.test(e.subject + e.body) && (e.subject + e.body).includes(add));
     if (!m) throw new Error("no change-approved email"); console.log(`      email: "${m.subject}" · ${m.status}`);
   });
 });

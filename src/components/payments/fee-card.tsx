@@ -155,7 +155,8 @@ export function PaymentRowCard({ p }: { p: Payment }) {
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-label text-ink">
-            {p.charge && !p.charge.estimate && p.charge.studentPays ? p.charge.totalLabel : p.amountLabel} · {p.label}
+            {/* Every attempt shows the fee; only money that actually went through shows the total with Paystack's charge. */}
+            {p.paidAt && p.charge && !p.charge.estimate && p.charge.studentPays ? `${p.charge.totalLabel} paid` : p.amountLabel} · {p.label}
           </span>
           <span className="truncate text-body-sm text-ink-2">
             {p.methodLabel} · <span className="font-mono">{p.reference}</span> · {formatShort(p.paidAt ?? p.startedAt)}

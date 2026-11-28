@@ -346,7 +346,7 @@ function paymentView(b: B2, p: MPayment, sem: ReturnType<typeof currentSemester>
       : p.status === "CONFIRMING"
         ? "We are confirming your payment with your bank. Do not pay again: this page updates by itself."
         : p.status === "PAID"
-          ? `Your platform fee for ${label} is paid. Registration is open to you.`
+          ? `Your platform fee for ${label} is paid. Registration and exams are unlocked for this semester.`
           : p.status === "FAILED"
             ? p.failureReason ?? "The payment did not go through. Nothing was charged."
             : p.status === "EXPIRED"
@@ -402,7 +402,7 @@ function feeView(b: B2, u: Uni, studentId: string): Fee | null {
   const message = {
     NOT_PAID: "Pay your platform fee to register your courses and sit exams.",
     CONFIRMING: "We are waiting for your bank to confirm your payment. Do not pay again.",
-    PAID: `Paid on ${paid?.paidAt ? longDay(lagosDay(paid.paidAt)) : "—"}. Registration is open to you.`,
+    PAID: `Paid on ${paid?.paidAt ? longDay(lagosDay(paid.paidAt)) : "—"}. Registration and exams are unlocked for this semester.`,
     REFUNDED: "Your payment was refunded. Pay again to register your courses and sit exams.",
     REVERSED: `Your bank took back the ${naira(b.amount)} you paid on ${rev?.paidAt ? dayMonth(lagosDay(rev.paidAt)) : "—"}. Registration and exams are locked. Pay again or call the ODeL office.`,
   }[status];
