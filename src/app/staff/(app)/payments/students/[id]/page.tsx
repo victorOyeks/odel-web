@@ -73,7 +73,7 @@ export default async function StudentPaymentsPage({ params }: PageProps<"/staff/
             columns={[
               { header: "Started", cell: (p) => formatShort(p.startedAt), className: "whitespace-nowrap" },
               { header: "Method", cell: (p) => p.methodLabel },
-              { header: "Reference", cell: (p) => <span className="font-mono">{p.reference}</span> },
+              { header: "Reference", cell: (p) => <span className="font-mono">{p.reference}</span>, className: "whitespace-nowrap" },
               { header: "Status", cell: (p) => <Badge tone={PAYMENT_TONE[p.status]}>{p.statusLabel}</Badge> },
               {
                 header: "Detail",
