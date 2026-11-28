@@ -28,6 +28,13 @@ export function proxy(req: NextRequest) {
   requestHeaders.set("x-odel-path", pathname + req.nextUrl.search);
 
   if (surface === "console") {
+    // The staff web's sign-in does not exist on the console: send it to the console's own sign-in.
+    if (pathname === "/staff" || pathname.startsWith("/staff/")) {
+      const url = req.nextUrl.clone();
+      url.pathname = pathname.startsWith("/staff/sign-in") ? pathname.replace(/^\/staff/, "") : "/";
+      if (!pathname.startsWith("/staff/sign-in")) url.search = "";
+      return NextResponse.redirect(url);
+    }
     if (!SHARED.some((re) => re.test(pathname)) && !pathname.startsWith("/console")) {
       const url = internal(req, `/console${pathname === "/" ? "" : pathname}`);
       return NextResponse.rewrite(url, { request: { headers: requestHeaders } });

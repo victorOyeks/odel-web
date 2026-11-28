@@ -29,8 +29,9 @@ test("provider adds a university: SA-01 → SA-02b → SA-03b → SA-05 → SA-0
   await expect(page.getByText(/Text on it reads well/)).toBeVisible();
 
   await page.getByRole("button", { name: "Next: rules and payments" }).click();
-  await expect(page.getByText("Defaults for now; the university’s admin sets these")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Settlement account (optional now)" })).toBeVisible();
   await page.getByRole("button", { name: "Next: review" }).click();
+  await expect(page.getByText(/₦15,000 per semester, ₦3,000 to the ODeL centre · settlement account set later/)).toBeVisible();
   await expect(page.getByText("tunde.ajayi@ajayicoe.edu.ng · invitation sent when you create it")).toBeVisible();
   await page.getByRole("button", { name: "Create the university" }).click();
 

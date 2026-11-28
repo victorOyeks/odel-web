@@ -13,6 +13,7 @@ type Item = { key: string; label: string; href: string; icon: IconName };
 /** Student web side menu (D0 App Shell / Student Web). */
 const SIDE: Item[] = [
   { key: "home", label: "Home", href: "/", icon: "home" },
+  { key: "registration", label: "Registration", href: "/registration", icon: "how_to_reg" },
   { key: "courses", label: "My courses", href: "/courses", icon: "menu_book" },
   { key: "classes", label: "Live classes", href: "/classes", icon: "videocam" },
   { key: "assessments", label: "Assessments", href: "/assessments", icon: "quiz" },
@@ -34,6 +35,9 @@ const TABS: Item[] = [
   { key: "exams", label: "Exams", href: "/exams", icon: "assignment" },
   { key: "more", label: "More", href: "/more", icon: "more_horiz" },
 ];
+
+/** Everything in the side menu, for the phone More page. */
+export const STUDENT_MENU: Item[] = [...SIDE, ...SIDE_FOOTER].filter((i) => i.href !== "/");
 
 export const STUDENT_SECTIONS = [...SIDE, ...SIDE_FOOTER, ...TABS].filter((i) => i.href !== "/");
 

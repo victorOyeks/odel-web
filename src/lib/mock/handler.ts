@@ -27,6 +27,7 @@ import { academicRoute } from "./b1-academic";
 import { peopleRoute } from "./b1-people";
 import { studentSessionUser, studentsRoute } from "./b1-students";
 import type { B1Ctx } from "./b1-util";
+import { b2PlatformRoute, b2Route, withCentreMoves } from "./b2";
 
 interface MockSession {
   id: string;
@@ -461,6 +462,16 @@ export async function mockHandle(req: Request, host: string): Promise<Response> 
       const denied = requireSignedIn();
       if (denied) return denied;
       if (surface !== "console" || activeRole()?.role !== "SUPER_ADMIN") return forbidden();
+      const demoSeed = process.env.ODEL_MOCK_SEED !== "empty";
+      const b2 = await b2PlatformRoute(
+        req,
+        path,
+        method,
+        url,
+        st.tenants.map((t) => ({ id: t.id, name: t.name, uni: t.host ? () => uniFor(`${t.host}.localhost`) : null, demo: demoSeed && t.host === "wesley" })),
+        sessionBody(session!).user.fullName,
+      );
+      if (b2) return b2;
       return platform();
     }
 
@@ -513,7 +524,11 @@ export async function mockHandle(req: Request, host: string): Promise<Response> 
           for (const [k, v] of st.sessions) if (v.studentId === studentId && !(exceptCurrent && v === session)) st.sessions.delete(k);
         },
       };
+      const b2 = await b2Route(ctx, { demo: hostLabel(host) === "wesley" && process.env.ODEL_MOCK_SEED !== "empty", tenantId: t.id });
+      if (b2) return b2;
       const out = (await academicRoute(ctx)) ?? (await peopleRoute(ctx)) ?? (await studentsRoute(ctx));
+      const rec = method === "GET" ? path.match(/^\/students\/([^/]+)$/) : null;
+      if (out && rec && out.status === 200) return json(200, withCentreMoves(ctx.uni, rec[1], await out.json()));
       if (out) return out;
     }
 
