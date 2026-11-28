@@ -44,8 +44,30 @@ const ADMIN_NAV: NavItem[] = [
 /** Every other staff role gets a home page until its own screens are built. */
 const HOME_NAV: NavItem[] = [{ label: "Home", href: "/staff", icon: "home" }];
 
+/** B2: the coordinator decides requests and sees registrations at their centres (A-03, A-07). */
+const COORDINATOR_NAV: NavItem[] = [
+  { label: "Home", href: "/staff", icon: "home" },
+  { label: "Approvals", href: "/staff/registration/requests", icon: "fact_check" },
+  { label: "Registrations", href: "/staff/registration", icon: "how_to_reg", also: ["/staff/registration/students"] },
+];
+
+/** B2: the director reads payments and registrations; management reads payments. */
+const DIRECTOR_NAV: NavItem[] = [
+  { label: "Home", href: "/staff", icon: "home" },
+  { label: "Payments", href: "/staff/payments", icon: "payments" },
+  { label: "Registration", href: "/staff/registration", icon: "how_to_reg" },
+];
+const MANAGEMENT_NAV: NavItem[] = [
+  { label: "Home", href: "/staff", icon: "home" },
+  { label: "Payments", href: "/staff/payments", icon: "payments" },
+];
+
 export function staffNav(role: RoleCode | undefined): NavItem[] {
-  return role === "ODEL_ADMIN" ? ADMIN_NAV : HOME_NAV;
+  if (role === "ODEL_ADMIN") return ADMIN_NAV;
+  if (role === "CENTRE_COORDINATOR") return COORDINATOR_NAV;
+  if (role === "ODEL_DIRECTOR") return DIRECTOR_NAV;
+  if (role === "MANAGEMENT") return MANAGEMENT_NAV;
+  return HOME_NAV;
 }
 
 export const STAFF_FOOTER: NavItem[] = [

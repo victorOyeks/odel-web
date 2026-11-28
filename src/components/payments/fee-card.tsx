@@ -6,22 +6,11 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { formatDate, formatShort } from "@/lib/format";
-import type { Fee, Payment, PaymentStatus } from "@/lib/types-b2";
+import type { Fee, Payment } from "@/lib/types-b2";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { PAYMENT_TONE } from "@/lib/b2-labels";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-
-export const PAYMENT_TONE: Record<PaymentStatus, BadgeTone> = {
-  PENDING: "neutral",
-  CONFIRMING: "info",
-  PAID: "success",
-  FAILED: "danger",
-  CANCELLED: "neutral",
-  EXPIRED: "neutral",
-  REFUNDING: "warning",
-  REFUNDED: "neutral",
-  REVERSED: "danger",
-};
 
 const FEE_TONE: Record<Fee["status"], { box: string; badge: BadgeTone }> = {
   NOT_PAID: { box: "bg-warning-subtle", badge: "warning" },

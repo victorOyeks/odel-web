@@ -30,11 +30,17 @@ export interface ShellProps {
   children: ReactNode;
 }
 
-function isActive(pathname: string, item: NavItem, surface: Surface) {
+function matches(pathname: string, item: NavItem, surface: Surface) {
   const under = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   if (item.also?.some(under)) return true;
   if (item.href === homePath(surface)) return pathname === item.href;
   return under(item.href);
+}
+
+/** The menu item for this page: when two match (Registrations and its Approvals), the longer address wins. */
+function isActive(pathname: string, item: NavItem, surface: Surface, all: NavItem[] = [item]) {
+  if (!matches(pathname, item, surface)) return false;
+  return !all.some((o) => o !== item && o.href.length > item.href.length && o.href.startsWith(item.href) && matches(pathname, o, surface));
 }
 
 /** Staff web and provider console frame: side menu + top bar (D1 W-10, D10 SA-01). */
@@ -46,7 +52,7 @@ export function AppShell(props: ShellProps) {
   const [signingOut, setSigningOut] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
 
-  const title = [...nav, ...footer].find((i) => isActive(pathname, i, surface))?.label ?? nav[0]?.label ?? "Home";
+  const title = [...nav, ...footer].find((i) => isActive(pathname, i, surface, [...nav, ...footer]))?.label ?? nav[0]?.label ?? "Home";
 
   // Close the drawer when the page changes.
   const [lastPath, setLastPath] = useState(pathname);
@@ -189,13 +195,13 @@ function SideNav({
       <div className="h-3" />
       <ul className="flex flex-col gap-1">
         {nav.map((item) => (
-          <NavLink key={item.href} item={item} active={isActive(pathname, item, surface)} />
+          <NavLink key={item.href} item={item} active={isActive(pathname, item, surface, [...nav, ...footer])} />
         ))}
       </ul>
       <div className="min-h-6 flex-1" />
       <ul className="flex flex-col gap-1">
         {footer.map((item) => (
-          <NavLink key={item.href} item={item} active={isActive(pathname, item, surface)} />
+          <NavLink key={item.href} item={item} active={isActive(pathname, item, surface, [...nav, ...footer])} />
         ))}
         <li>
           <button

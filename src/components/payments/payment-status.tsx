@@ -12,7 +12,7 @@ import { Banner } from "@/components/ui/banner";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import type { IconName } from "@/components/ui/icon-names";
-import { PAYMENT_TONE } from "./fee-card";
+import { PAYMENT_TONE } from "@/lib/b2-labels";
 
 /** Copies a value; says so for screen readers. */
 export function CopyButton({ value, label }: { value: string; label: string }) {

@@ -9,24 +9,14 @@ import { formatDate, formatWhen } from "@/lib/format";
 import type { RegRequest, Registration } from "@/lib/types-b2";
 import type { ApiError } from "@/lib/types";
 import type { UploadTicket } from "@/lib/types-b1";
-import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
+import { REASONS, REQUEST_TONE } from "@/lib/b2-labels";
 import { Banner } from "@/components/ui/banner";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { SelectField, TextArea } from "@/components/ui/fields";
 import { Icon } from "@/components/ui/icon";
 
-export const REQUEST_TONE: Record<RegRequest["status"], BadgeTone> = { PENDING: "warning", APPROVED: "success", DECLINED: "danger", CANCELLED: "neutral" };
-
-export const REASONS = [
-  ["MEDICAL", "Medical"],
-  ["BEREAVEMENT", "Bereavement"],
-  ["WORK", "Work"],
-  ["TRAVEL", "Travel"],
-  ["FEES", "Fees"],
-  ["TECHNICAL", "Technical problem"],
-  ["OTHER", "Other"],
-] as const;
 
 const kind = (k: RegRequest["kind"]) => (k === "LATE" ? "Late registration" : "Course change");
 
