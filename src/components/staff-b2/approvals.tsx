@@ -24,7 +24,7 @@ const detailOf = (d: RegRequest | { request: RegRequest; registration: RegReques
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
 /** A-03 queue with A-03c detail: list on the left, the chosen request on the right (stacked on phones). */
-export function Approvals({ items, selectedId, canDecide, notice }: { items: RegRequest[]; selectedId: string | null; canDecide: boolean; notice: string | null }) {
+export function Approvals({ items, selectedId, canDecide, notice, empty }: { items: RegRequest[]; selectedId: string | null; canDecide: boolean; notice: string | null; empty?: React.ReactNode }) {
   const router = useRouter();
   const [sel, setSel] = useState<string | null>(selectedId ?? null);
   const [done, setDone] = useState<string | null>(notice);
@@ -38,7 +38,8 @@ export function Approvals({ items, selectedId, canDecide, notice }: { items: Reg
   return (
     <div className="flex flex-col gap-4">
       {done ? <Banner tone="success" title={done} /> : null}
-      <div className="grid gap-4 lg:grid-cols-[minmax(280px,380px)_minmax(0,1fr)] lg:items-start">
+      {!items.length && !sel ? empty : null}
+      <div className={cn(!items.length && !sel ? "hidden" : "grid", "gap-4 lg:grid-cols-[minmax(280px,380px)_minmax(0,1fr)] lg:items-start")}>
         <ul aria-label="Requests" className={cn("flex-col overflow-hidden rounded-lg border border-line bg-surface", sel ? "hidden lg:flex" : "flex")}>
           {items.map((r) => (
             <li key={r.id} className="border-b border-line last:border-0">

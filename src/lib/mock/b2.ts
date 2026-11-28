@@ -8,6 +8,23 @@ import type { CarryOver, CentreMove, Fee, FeeStatus, PayMethod, Payment, Payment
 // ---------------------------------------------------------------- formatting
 
 const naira = (n: number) => `₦${n.toLocaleString("en-NG")}`;
+const naira2 = (n: number) => `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** Paystack grosses the fee up when the student pays its charge: ₦15,000 → ₦15,329.95. */
+function chargeOf(fee: number, estimate: boolean) {
+  const total = Math.min(fee + 2000, Math.round(((fee + (fee >= 2500 ? 100 : 0)) / 0.985) * 100) / 100);
+  const charge = Math.round((total - fee) * 100) / 100;
+  return {
+    studentPays: true,
+    fee,
+    charge,
+    total,
+    feeLabel: naira(fee),
+    chargeLabel: naira2(charge),
+    totalLabel: naira2(total),
+    estimate,
+    note: estimate ? `Paystack adds its charge of about ${naira2(charge)}, so you pay about ${naira2(total)}. Paystack shows the exact amount before you confirm.` : null,
+  };
+}
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const asDate = (d: string) => new Date(`${d.slice(0, 10)}T12:00:00Z`);
@@ -360,11 +377,12 @@ function paymentView(b: B2, p: MPayment, sem: ReturnType<typeof currentSemester>
     ussd: p.method === "USSD" && p.ussdBank ? { bank: USSD[p.ussdBank].name, code: `${USSD[p.ussdBank].code.replace("#", "")}*000*${p.reference.slice(-4)}#`, expiresAt: p.expiresAt ?? "" } : null,
     transfer:
       p.method === "BANK_TRANSFER"
-        ? { bankName: "Paystack-Titan", accountNumber: `99${p.reference.replace(/\D/g, "").padStart(8, "0").slice(-8)}`, accountName: "Wesley University ODeL / Paystack", amount: b.amount, amountLabel: `${naira(b.amount)}.00`, expiresAt: p.expiresAt ?? "", note: `Send exactly ${naira(b.amount)}.00 in one transfer. This account works for 30 minutes.` }
+        ? { bankName: "Paystack-Titan", accountNumber: `99${p.reference.replace(/\D/g, "").padStart(8, "0").slice(-8)}`, accountName: "Wesley University ODeL / Paystack", amount: chargeOf(b.amount, false).total, amountLabel: chargeOf(b.amount, false).totalLabel, expiresAt: p.expiresAt ?? "", note: `Send exactly ${chargeOf(b.amount, false).totalLabel} in one transfer: the ${naira(b.amount)} fee plus Paystack's ${chargeOf(b.amount, false).chargeLabel} charge. Sending ${naira(b.amount)} alone does not complete the payment. This account works for 30 minutes.` }
         : null,
     failureReason: p.failureReason,
     receiptUrl: p.status === "PAID" || p.status === "REFUNDING" || p.status === "REFUNDED" || p.status === "REVERSED" ? `/api/v1/payments/${p.id}/receipt.pdf` : null,
     refund: p.refund,
+    charge: chargeOf(b.amount, !(p.paidAt || p.method === "BANK_TRANSFER")),
   };
 }
 
@@ -416,6 +434,7 @@ function feeView(b: B2, u: Uni, studentId: string): Fee | null {
     ussdBanks: Object.entries(USSD).map(([key, v]) => ({ key, ...v })),
     ussdOtherBanks: "USSD works with GTBank, UBA, Sterling and Zenith. Another bank? Pay by card or transfer.",
     actions,
+    charge: chargeOf(b.amount, true),
   };
 }
 
@@ -1177,7 +1196,8 @@ export async function b2Route(ctx: B1Ctx, opts: { demo: boolean; tenantId: strin
       };
       if (method === "GET" && path === "/registration/carry-overs") {
         const sid = url.searchParams.get("studentId");
-        return json(200, { items: b.carry.filter((c) => !sid || c.studentId === sid).map(decorate) });
+        if (!sid) return err(400, "invalid", "Choose a student.");
+        return json(200, { items: b.carry.filter((c) => c.studentId === sid).map(decorate) });
       }
       if (method === "GET" && path === "/registration/carry-overs/template.csv") return csvResponse("carry-overs-template.csv", [["matric_number", "course_code", "from_session"], ["WU/ODL/24/0153", "CSC 103", "2025/2026"]]);
       if (method === "POST" && path === "/registration/carry-overs") {

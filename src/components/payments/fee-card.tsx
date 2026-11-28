@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
-import { formatDate, formatShort } from "@/lib/format";
+import { chargeLine, formatDate, formatShort } from "@/lib/format";
 import type { Fee, Payment } from "@/lib/types-b2";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { PAYMENT_TONE } from "@/lib/b2-labels";
@@ -51,6 +51,7 @@ export function FeeCard({ fee, registerHref, compact }: { fee: Fee; registerHref
         </div>
         <Badge tone={tone.badge}>{fee.statusLabel}</Badge>
       </div>
+      {fee.status !== "PAID" && chargeLine(fee.charge) ? <p className="text-body-sm text-ink-2">{chargeLine(fee.charge)}</p> : null}
       <p className="text-body text-ink-2">{fee.message}</p>
 
       {fee.status === "PAID" && fee.paidPayment ? (
@@ -154,7 +155,7 @@ export function PaymentRowCard({ p }: { p: Payment }) {
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-label text-ink">
-            {p.amountLabel} · {p.label}
+            {p.charge && !p.charge.estimate && p.charge.studentPays ? p.charge.totalLabel : p.amountLabel} · {p.label}
           </span>
           <span className="truncate text-body-sm text-ink-2">
             {p.methodLabel} · <span className="font-mono">{p.reference}</span> · {formatShort(p.paidAt ?? p.startedAt)}

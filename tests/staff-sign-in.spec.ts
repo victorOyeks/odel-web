@@ -30,9 +30,9 @@ test("first ODeL admin: W-01 → W-04 → W-05 → empty W-10 → S-04 sign out 
   const steps = page.getByRole("region", { name: "Setup steps" }).getByRole("listitem");
   await expect(steps).toHaveCount(9);
 
-  // A menu item that is not built yet is an honest empty state, not a broken page.
+  // B2: Payments is a real page now.
   await page.getByRole("link", { name: "Payments" }).click();
-  await expect(page.getByRole("heading", { name: "Payments is coming in a later phase" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Platform fee payments" })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   const dialog = page.getByRole("dialog", { name: "Sign out?" });

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { hardNavigate } from "@/lib/navigate";
 import { cn } from "@/lib/cn";
+import { chargeLine } from "@/lib/format";
 import type { Fee, PayMethod, Payment } from "@/lib/types-b2";
 import type { ApiError } from "@/lib/types";
 import { Banner } from "@/components/ui/banner";
@@ -98,6 +99,7 @@ export function PayForm({ fee }: { fee: Fee }) {
         <Button type="submit" size="lg" loading={busy} trailingIcon={method === "CARD" ? "open_in_new" : "arrow_forward"} className="sm:w-fit">
           {method === "CARD" ? `Pay ${fee.amountLabel} by card` : method === "USSD" ? "Get my USSD code" : "Get account details"}
         </Button>
+        {chargeLine(fee.charge) ? <p className="text-body text-ink">{chargeLine(fee.charge)}</p> : null}
         <p className="text-body-sm text-ink-2">
           Payments go through Paystack. We never see your card details. Your fee is marked paid only when your bank confirms the payment.
         </p>
@@ -109,11 +111,24 @@ export function PayForm({ fee }: { fee: Fee }) {
             <dt className="text-ink-2">Platform fee</dt>
             <dd className="text-ink">{fee.label}</dd>
           </div>
+          {fee.charge?.studentPays ? (
+            <>
+              <div className="flex justify-between gap-3">
+                <dt className="text-ink-2">Fee</dt>
+                <dd className="text-ink">{fee.charge.feeLabel}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-ink-2">Paystack charge{fee.charge.estimate ? " (about)" : ""}</dt>
+                <dd className="text-ink">{fee.charge.chargeLabel}</dd>
+              </div>
+            </>
+          ) : null}
           <div className="flex justify-between gap-3 border-t border-line pt-2">
-            <dt className="font-semibold text-ink">Total</dt>
-            <dd className="text-h4 text-ink">{fee.amountLabel}</dd>
+            <dt className="font-semibold text-ink">{fee.charge?.studentPays && fee.charge.estimate ? "You pay about" : "Total"}</dt>
+            <dd className="text-h4 text-ink">{fee.charge?.studentPays ? fee.charge.totalLabel : fee.amountLabel}</dd>
           </div>
         </dl>
+        {fee.charge?.studentPays && fee.charge.note ? <p className="text-body-sm text-ink-2">{fee.charge.note}</p> : null}
         <p className="text-body-sm text-ink-2">Pays for this semester only. It unlocks course registration and exams. Results are never held for the fee.</p>
       </aside>
     </div>

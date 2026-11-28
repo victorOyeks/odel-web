@@ -73,17 +73,21 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/staff/
           </>
         ) : null}
       </LiveSearchForm>
-      {!d.items.length ? (
-        <EmptyCard
-          title={f.status === "PENDING" ? "Nothing waiting" : "No requests match"}
-          icon="fact_check"
-          action={f.status !== "PENDING" || f.kind || f.centreId || f.noCoordinator ? <ButtonLink href="/staff/registration/requests" variant="secondary">Show what is waiting</ButtonLink> : undefined}
-        >
-          {f.status === "PENDING" ? "New late registration and course change requests appear here, and you get an email for each." : "Try another filter."}
-        </EmptyCard>
-      ) : (
-        <Approvals items={d.items} selectedId={str(sp.id) || null} canDecide={role === "ODEL_ADMIN" || role === "CENTRE_COORDINATOR"} notice={null} />
-      )}
+      <Approvals
+        items={d.items}
+        selectedId={str(sp.id) || null}
+        canDecide={role === "ODEL_ADMIN" || role === "CENTRE_COORDINATOR"}
+        notice={null}
+        empty={
+          <EmptyCard
+            title={f.status === "PENDING" ? "Nothing waiting" : "No requests match"}
+            icon="fact_check"
+            action={f.status !== "PENDING" || f.kind || f.centreId || f.noCoordinator ? <ButtonLink href="/staff/registration/requests" variant="secondary">Show what is waiting</ButtonLink> : undefined}
+          >
+            {f.status === "PENDING" ? "New late registration and course change requests appear here, and you get an email for each." : "Try another filter."}
+          </EmptyCard>
+        }
+      />
     </>
   );
 }

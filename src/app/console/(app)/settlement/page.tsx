@@ -43,11 +43,11 @@ export default async function SettlementPage({ searchParams }: PageProps<"/conso
     <>
       <PageHeader
         title="Settlement"
-        subtitle={`Platform fee payments from ${r.from} to ${r.to}. Paystack's charge comes out of the provider's share, so each centre gets its full share.`}
+        subtitle={`Platform fee payments from ${r.from} to ${r.to}. Each centre gets its full share; where the student paid Paystack's charge, provider net counts it.`}
         actions={
           <ExportRows
             fileName={`settlement-${r.from}-${r.to}.csv`}
-            rows={[["reference", "university", "matric_number", "semester", "paid_at", "method", "amount", "provider", "centre", "gateway_fee", "provider_net", "status"], ...r.items.map((i) => [i.reference, i.university, i.matricNumber, i.label, i.paidAt, i.method, i.amount, i.provider, i.centre, i.gatewayFee, i.providerNet, i.status])]}
+            rows={[["reference", "university", "matric_number", "semester", "paid_at", "method", "amount", "provider", "centre", "gateway_fee", "student_charge", "provider_net", "status"], ...r.items.map((i) => [i.reference, i.university, i.matricNumber, i.label, i.paidAt, i.method, i.amount, i.provider, i.centre, i.gatewayFee, i.studentCharge ?? 0, i.providerNet, i.status])]}
           />
         }
       />
@@ -113,6 +113,7 @@ export default async function SettlementPage({ searchParams }: PageProps<"/conso
               { header: "Provider", cell: (i) => naira(i.provider), numeric: true },
               { header: "Centre", cell: (i) => naira(i.centre), numeric: true },
               { header: "Paystack", cell: (i) => naira(i.gatewayFee), numeric: true },
+              ...(r.items.some((i) => i.studentCharge) ? [{ header: "Student paid charge", cell: (i: (typeof r.items)[number]) => naira(i.studentCharge ?? 0), numeric: true }] : []),
               { header: "Net", cell: (i) => naira(i.providerNet), numeric: true },
               { header: "Status", cell: (i) => <Badge tone={i.status === "PAID" ? "success" : i.status === "REVERSED" ? "danger" : "warning"}>{i.status === "PAID" ? "Paid" : i.status.charAt(0) + i.status.slice(1).toLowerCase()}</Badge> },
             ]}

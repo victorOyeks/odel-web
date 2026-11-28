@@ -16,6 +16,19 @@ export interface Refund {
   reason: string | null;
 }
 
+/** Paystack's charge, paid by the student (owner, 28 Nov 2026). `estimate` until Paystack has given the real figure. */
+export interface Charge {
+  studentPays: boolean;
+  fee: number;
+  charge: number;
+  total: number;
+  feeLabel: string;
+  chargeLabel: string;
+  totalLabel: string;
+  estimate: boolean;
+  note: string | null;
+}
+
 export interface Payment {
   id: string;
   feeId: string;
@@ -37,6 +50,7 @@ export interface Payment {
   failureReason: string | null;
   receiptUrl: string | null;
   refund: Refund | null;
+  charge?: Charge | null;
 }
 
 export interface Fee {
@@ -61,6 +75,7 @@ export interface Fee {
   ussdBanks: { key: string; name: string; code: string }[];
   ussdOtherBanks: string;
   actions: ("PAY" | "CHECK_STATUS" | "DOWNLOAD_RECEIPT" | "VIEW_PAYMENTS")[];
+  charge?: Charge | null;
 }
 
 // ---- staff payments
@@ -159,7 +174,7 @@ export interface SettlementReport {
   to: string;
   totals: SettlementMoney;
   universities: (SettlementMoney & { tenantId: string; name: string })[];
-  items: { reference: string; university: string; matricNumber: string; label: string; paidAt: string; method: string; amount: number; provider: number; centre: number; gatewayFee: number; providerNet: number; status: string }[];
+  items: { reference: string; university: string; matricNumber: string; label: string; paidAt: string; method: string; amount: number; provider: number; centre: number; gatewayFee: number; studentCharge?: number; providerNet: number; status: string }[];
   page: number;
   size: number;
   total: number;

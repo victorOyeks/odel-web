@@ -107,7 +107,7 @@ test("student activation: M-02 → wrong code → M-03 → M-04 rules → M-05 c
   await expect(page.getByRole("heading", { name: "Check your details" })).toBeVisible();
   await expect(page.getByText("WU/ODL/24/0153 · B.Sc. Computer Science · 200L")).toBeVisible();
   await page.getByRole("button", { name: "Save and go to my dashboard" }).click();
-  await expect(page.getByRole("heading", { name: "Your courses appear after registration" })).toBeVisible();
+  await expect(page.getByText("Platform fee · 2026/2027 · 1st semester").first()).toBeVisible();
   await expect(page.getByText("Akure Study Centre").first()).toBeVisible();
 
   // E-02: activating again says the account is active.
@@ -130,7 +130,7 @@ test("student activation: M-02 → wrong code → M-03 → M-04 rules → M-05 c
   await page.getByLabel("New password", { exact: true }).fill("Adeola2027");
   await page.getByLabel("Confirm password", { exact: true }).fill("Adeola2027");
   await page.getByRole("button", { name: "Save and sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Your courses appear after registration" })).toBeVisible();
+  await expect(page.getByText("Platform fee · 2026/2027 · 1st semester").first()).toBeVisible();
 });
 
 test("student sign-in edge cases: E-05 locked after five wrong passwords, E-06 suspended, E-03 no email", async ({ page }) => {

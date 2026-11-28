@@ -450,7 +450,7 @@ export function NewUniversity() {
               <TextField label="ODeL centre's share (₦)" inputMode="numeric" value={fee.share} onChange={(e) => setFee((x) => ({ ...x, share: e.target.value.replace(/\D/g, "") }))} error={feeErr.share} />
             </div>
             <p className="text-body-sm text-ink-2">
-              Provider&apos;s share {naira(Math.max(0, Number(fee.amount) - Number(fee.share)))} per payment; Paystack&apos;s charge comes out of it. Only the provider sees this split.
+              Provider&apos;s share {naira(Math.max(0, Number(fee.amount) - Number(fee.share)))} per payment. Students pay Paystack&apos;s charge on top of the fee. Only the provider sees this split.
             </p>
           </section>
           <section aria-labelledby="acc-h" className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 sm:p-5">

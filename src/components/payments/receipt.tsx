@@ -19,6 +19,13 @@ export function Receipt({ tenant, profile, p }: { tenant: PublicTenant; profile:
     ["Semester", semester ?? ""],
     ["Paid on", p.paidAt ? formatWhen(p.paidAt) : "—"],
     ["Method", p.methodLabel],
+    ...(p.charge?.studentPays && !p.charge.estimate
+      ? ([
+          ["Platform fee", p.charge.feeLabel],
+          ["Paystack charge", p.charge.chargeLabel],
+          ["Total paid", p.charge.totalLabel],
+        ] as [string, string][])
+      : []),
     ["Status", p.status === "PAID" ? "Paid" : p.statusLabel],
   ];
   return (

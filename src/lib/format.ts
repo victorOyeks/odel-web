@@ -44,3 +44,10 @@ export function formatShort(iso: string | null | undefined): string {
   const time = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
   return `${day}, ${time}`;
 }
+
+/** "₦15,000 + about ₦329.95 Paystack charge · you pay about ₦15,329.95" (null when the student does not pay the charge). */
+export function chargeLine(c: { studentPays: boolean; feeLabel: string; chargeLabel: string; totalLabel: string; estimate: boolean } | null | undefined): string | null {
+  if (!c || !c.studentPays) return null;
+  const about = c.estimate ? "about " : "";
+  return `${c.feeLabel} + ${about}${c.chargeLabel} Paystack charge · you ${c.estimate ? "pay" : "paid"} ${about}${c.totalLabel}`;
+}

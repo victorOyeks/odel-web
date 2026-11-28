@@ -195,11 +195,12 @@ export function PaymentStatus({ initial, fromCheckout = false }: { initial: Paym
           <Row label="Your bank" value={u.bank} />
           <Row label="Code to dial" value={u.code} copy mono />
           <Row label="Reference" value={p.reference} copy mono />
-          <Row label="Amount" value={`${p.amountLabel}.00`} copy mono />
+          <Row label="Amount" value={p.charge?.studentPays ? p.charge.totalLabel : `${p.amountLabel}.00`} copy mono />
         </dl>
         <a href={`tel:${encodeURIComponent(u.code)}`} className="inline-flex min-h-12 w-fit items-center gap-2 rounded-md px-3 font-semibold text-brand hover:bg-brand-subtle md:hidden">
           <Icon name="call" /> Dial it now
         </a>
+        {p.charge?.studentPays && p.charge.note ? <p className="text-body-sm text-ink-2">{p.charge.note}</p> : null}
         <Countdown until={u.expiresAt} onEnd={() => call("check", `/payments/${p.id}/check`)} />
         <p className="text-body text-ink-2">Works without data or internet. Your bank asks for your PIN, then confirms the payment. Then come back and tap the button below.</p>
         <Actions>
@@ -271,7 +272,7 @@ export function PaymentStatus({ initial, fromCheckout = false }: { initial: Paym
           {p.message ?? `Your platform fee for ${p.label} is paid.`} We have emailed your receipt.
         </Hero>
         <dl className="flex flex-col gap-3 rounded-lg border border-line p-4">
-          <Row label="Amount" value={p.amountLabel} />
+          <Row label="Amount" value={p.charge?.studentPays ? `${p.charge.totalLabel} (${p.charge.feeLabel} fee + ${p.charge.chargeLabel} Paystack charge)` : p.amountLabel} />
           <Row label="For" value={`Platform fee · ${p.label}`} />
           <Row label="Paid with" value={p.methodLabel} />
           <Row label="Paid on" value={p.paidAt ? formatWhen(p.paidAt) : "—"} />

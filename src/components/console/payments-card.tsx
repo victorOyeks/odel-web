@@ -158,7 +158,7 @@ export function PaymentsCard({ tenantId, initial }: { tenantId: string; initial:
         <dd className="text-ink">{naira(p.amount)} per student per semester</dd>
         <dt className="text-ink-2">Split per payment</dt>
         <dd className="text-ink">
-          {naira(p.providerShare)} provider · {naira(p.centreShare)} ODeL centre <span className="text-ink-2">(Paystack&apos;s charge comes out of the provider&apos;s share)</span>
+          {naira(p.providerShare)} provider · {naira(p.centreShare)} ODeL centre <span className="text-ink-2">(students pay Paystack&apos;s charge on top of the fee)</span>
         </dd>
         <dt className="text-ink-2">Settlement account</dt>
         <dd className="text-ink">
