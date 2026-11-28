@@ -49,6 +49,10 @@ function platformBase(): string {
 const RESERVED_RE = /(\.(test|example|invalid|localhost|local)|(^|\.)example\.(com|org|net))$/i;
 const SLUG_RE = /^[a-z][a-z0-9-]{1,30}$/;
 
+/** QA ODEL-B0-003: names need at least one letter (any alphabet); 11111 or --- is refused. */
+const HAS_LETTER = /\p{L}/u;
+const NEEDS_LETTERS = "Use letters: a name cannot be only numbers or symbols";
+
 function suggestSlug(name: string) {
   return (name.toLowerCase().match(/[a-z][a-z0-9]*/)?.[0] ?? "").slice(0, 31);
 }
@@ -109,13 +113,16 @@ export function NewUniversity() {
   function validateDetails(): Errors {
     const e: Errors = {};
     if (!f.name.trim()) e.name = "Enter the university’s full name";
+    else if (!HAS_LETTER.test(f.name)) e.name = NEEDS_LETTERS;
     if (!f.shortName.trim()) e.shortName = "Enter a short name, for example Wesley ODeL";
+    else if (!HAS_LETTER.test(f.shortName)) e.shortName = NEEDS_LETTERS;
     if (f.webAddress.trim() && !HOST_RE.test(f.webAddress.trim())) e.webAddress = "Enter an address like odl.crestfield.edu.ng, without https://";
     else if (f.webAddress.trim() && RESERVED_RE.test(f.webAddress.trim()))
       e.webAddress = "Use a real domain the university controls; test domains like .test or example.com can never be reached";
     if (!SLUG_RE.test(f.slug)) e.slug = "Use 2–31 lowercase letters, numbers or dashes, starting with a letter";
     if (!f.googleDomain.trim() || !HOST_RE.test(f.googleDomain.trim())) e.googleDomain = "Enter the domain staff emails end with, for example crestfield.edu.ng";
     if (!f.adminName.trim()) e.adminName = "Enter the first admin’s name";
+    else if (!HAS_LETTER.test(f.adminName)) e.adminName = "Enter the first admin’s real name, in letters";
     if (!EMAIL_RE.test(f.adminEmail.trim())) e.adminEmail = "Enter an email address like name@crestfield.edu.ng";
     else if (f.googleDomain && !f.adminEmail.trim().toLowerCase().endsWith(`@${f.googleDomain.trim().toLowerCase()}`))
       e.adminEmail = `Use their @${f.googleDomain.trim()} address so they can sign in with Google`;
@@ -130,7 +137,7 @@ export function NewUniversity() {
       return;
     }
     setBusy(true);
-    const q = new URLSearchParams({ slug: f.slug });
+    const q = new URLSearchParams({ slug: f.slug, name: f.name.trim() });
     if (f.webAddress.trim()) q.set("webAddress", f.webAddress.trim().toLowerCase());
     const r = await api<AddressAvailability>("GET", `/platform/tenants/address-available?${q}`);
     setBusy(false);
@@ -139,11 +146,13 @@ export function NewUniversity() {
       return;
     }
     const e2: Errors = {};
+    if (r.data.name && !r.data.name.available) e2.name = r.data.name.message ?? "A university with this name is already on the platform";
     if (r.data.webAddress && !r.data.webAddress.available) e2.webAddress = r.data.webAddress.message ?? "Already used by another university";
     if (r.data.slug && !r.data.slug.available) e2.slug = r.data.slug.message ?? "Already used by another university";
     if (Object.keys(e2).length) {
       setErrors(e2);
-      setTaken(e2.webAddress ? "web" : "slug");
+      if (e2.webAddress || e2.slug) setTaken(e2.webAddress ? "web" : "slug");
+      focusFirstError(e2);
       return;
     }
     go(2);
@@ -220,6 +229,11 @@ export function NewUniversity() {
     if (code === "web_address_taken" || code === "slug_taken") {
       setErrors(code === "web_address_taken" ? { webAddress: "Already used by another university" } : { slug: "Already used by another university" });
       setTaken(code === "web_address_taken" ? "web" : "slug");
+      go(1);
+      return;
+    }
+    if (code === "name_taken") {
+      setErrors({ name: r.error.fields?.name ?? r.error.message ?? "A university with this name is already on the platform" });
       go(1);
       return;
     }

@@ -147,6 +147,7 @@ export interface TenantListItem {
 export interface AddressAvailability {
   webAddress?: { available: boolean; message?: string };
   slug?: { available: boolean; message?: string };
+  name?: { available: boolean; message?: string };
 }
 
 export interface LogoUpload {
