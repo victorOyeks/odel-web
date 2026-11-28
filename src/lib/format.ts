@@ -1,7 +1,7 @@
 const TZ = "Africa/Lagos";
 
-/** "Mon 5 Jul, 3:02 pm" — the designs' date style, in the university's time zone. */
-export function formatWhen(iso: string): string {
+/** "Mon 5 Jul, 3:02 pm" — the designs' date style, in the university's time zone; with year "Mon 5 Jul 2027, 3:02 pm" (receipts). */
+export function formatWhen(iso: string, withYear = false): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -9,12 +9,13 @@ export function formatWhen(iso: string): string {
     weekday: "short",
     day: "numeric",
     month: "short",
+    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
   }).formatToParts(d);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  return `${get("weekday")} ${get("day")} ${get("month")}, ${get("hour")}:${get("minute")} ${get("dayPeriod").toLowerCase()}`;
+  return `${get("weekday")} ${get("day")} ${get("month")}${withYear ? ` ${get("year")}` : ""}, ${get("hour")}:${get("minute")} ${get("dayPeriod").toLowerCase()}`;
 }
 
 export function formatDay(iso: string): string {

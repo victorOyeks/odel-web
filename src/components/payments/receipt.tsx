@@ -17,7 +17,7 @@ export function Receipt({ tenant, profile, p }: { tenant: PublicTenant; profile:
     ["Programme", `${profile.programme.name} · ${profile.levelLabel}`],
     ["Session", session ?? p.label],
     ["Semester", semester ?? ""],
-    ["Paid on", p.paidAt ? formatWhen(p.paidAt) : "—"],
+    ["Paid on", p.paidAt ? formatWhen(p.paidAt, true) : "—"],
     ["Method", p.methodLabel],
     ...(p.charge?.studentPays && !p.charge.estimate
       ? ([

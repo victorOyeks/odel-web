@@ -269,7 +269,7 @@ export function PaymentStatus({ initial, fromCheckout = false }: { initial: Paym
     return (
       <Card>
         <Hero icon="check_circle" tone="bg-success-subtle text-success" title="Payment received">
-          {p.message ?? `Your platform fee for ${p.label} is paid.`} We have emailed your receipt.
+          Your platform fee for {p.label} is paid. Your receipt is ready, and we have emailed it to you.
         </Hero>
         <dl className="flex flex-col gap-3 rounded-lg border border-line p-4">
           <Row label="Amount" value={p.charge?.studentPays ? `${p.charge.totalLabel} (${p.charge.feeLabel} fee + ${p.charge.chargeLabel} Paystack charge)` : p.amountLabel} />
