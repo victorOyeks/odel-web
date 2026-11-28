@@ -141,7 +141,7 @@ export function RegisteredView({ reg, justDone }: { reg: Registration; justDone:
           <p className="text-body text-ink-2">
             Slip <span className="font-mono">{reg.slipNumber}</span>
             {reg.slipVersion > 1 ? ` (version ${reg.slipVersion})` : ""} · submitted {formatWhen(reg.submittedAt)}
-            {reg.updatedAt ? ` · updated ${formatWhen(reg.updatedAt)}` : ""}
+            {reg.updatedAt && reg.slipVersion > 1 ? ` · updated ${formatWhen(reg.updatedAt)}` : ""}
             {reg.late ? " · late registration" : ""}
           </p>
         </div>
