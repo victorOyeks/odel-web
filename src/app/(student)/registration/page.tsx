@@ -103,12 +103,16 @@ export default async function RegistrationPage({ searchParams }: PageProps<"/reg
               <ButtonLink href="/registration/late" size="lg">
                 Ask for late registration
               </ButtonLink>
-            ) : code === "fee_not_paid" ? (
+            ) : code === "fee_not_paid" || (code === "not_open" && m.fee?.required && !m.fee.paid && m.fee.status !== "CONFIRMING") ? (
               <ButtonLink href="/payments/pay">Pay the platform fee</ButtonLink>
             ) : undefined
           }
         >
-          {m.blocked?.message ?? "Check back later."} {code === "not_open" ? "Pay your platform fee before then so you can register on the first day. We email you when it opens." : ""}
+          {code === "not_open"
+            ? m.fee?.required && !m.fee.paid
+              ? "Pay your platform fee before then so you can register on the first day. We email you when it opens."
+              : "Your platform fee is paid, so you can register on the first day. We email you when it opens."
+            : (m.blocked?.message ?? "Check back later.")}
         </PageState>
       </section>
     );
