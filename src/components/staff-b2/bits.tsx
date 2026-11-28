@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Children } from "react";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/icon";
 import type { BadgeTone } from "@/components/ui/badge";
@@ -18,8 +19,19 @@ export function StatCard({ icon, iconClass, label, value, sub }: { icon: IconNam
   );
 }
 
+/** Summary cards that always fill the row: as many columns as cards on wide screens (no empty space on the right). */
+const STAT_COLS: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-2",
+  3: "grid-cols-2 md:grid-cols-3",
+  4: "grid-cols-2 xl:grid-cols-4",
+  5: "grid-cols-2 md:grid-cols-3 xl:grid-cols-5",
+  6: "grid-cols-2 md:grid-cols-3 xl:grid-cols-6",
+};
+
 export function StatGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">{children}</div>;
+  const n = Children.toArray(children).filter(Boolean).length;
+  return <div className={cn("grid gap-3", STAT_COLS[n] ?? "grid-cols-2 md:grid-cols-3 xl:grid-cols-6")}>{children}</div>;
 }
 
 export const dateInput = "h-12 rounded-md border border-line-strong bg-surface px-3 text-body text-ink md:h-10";
