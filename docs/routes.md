@@ -1,4 +1,4 @@
-# Routes (B0 Platform base, B1 Set up a session and let students in)
+# Routes (B0 Platform base, B1 Set up a session and let students in, B2 Pay and register)
 
 Figma files: **03 Staff Web** `JTrDKm6sW4Zc3xLtiF5Abn`, **02 Student Web** `oYPXI3kMCgPu5ZKDhehy7J`, **01 Student Mobile** `BdgcGOz6MmsQAdQ3JcOiwK`, **00 Design System** `JS7iHUa012ezAnsVeuQKjd`.
 
@@ -9,11 +9,29 @@ Status: **Built** = matches the frame and talks to the contract; **Adapted** = b
 | Route | Screen | Figma | Status |
 |---|---|---|---|
 | `/` (signed out) | M-01 Welcome: Activate my account / Sign in | 02 · D1 flow A M-01 | Built (paused university: "portal is paused") |
-| `/` (student signed in) | B1 Home: name, matric, programme, level, centre, "Your courses appear after registration" | — (B2/B3 Home later) | Adapted: honest B1 Home, no fake courses or fees |
+| `/` (student signed in) | Home: fee card (P-01 not paid, P-01e confirming "do not pay again", P-01b paid → Register now, E-07 paid twice, E-08 reversed) with Paystack's charge, "Your semester" (registration, courses, exams), details | 02 · D2 50:932 | Adapted: P-01c "moved centre" shows the new centre only (no student-facing move in the API) |
+| `/payments` | P-11 Payments: this semester's fee card and every attempt | 02 · D2 P-11 | Built |
+| `/payments/pay` | P-02 choose card / transfer / USSD (4 banks), summary with the charge; paid → Payments, confirming → that payment | 02 · D2 P-02 | Built |
+| `/payments/{id}` | P-03 finish on checkout, P-04 transfer (timer), P-04b USSD, P-05 confirming (polls Check), P-06 received, P-07 declined, P-08 closed, expired, E-07b refund, E-08 reversed | 02/01 · D2 | Built |
+| `/payments/return?reference=` (or `trxref=`) | Back from Paystack: asks the API, never marks anything paid | — | Built |
+| `/payments/{id}/receipt` | P-10 receipt with Download PDF and Print | 02 · D2 P-10 | Built |
+| `/registration` | R-01 not open, R-08 fee not paid, confirming, late needed / waiting, B10 late approved, R-02/R-03/R-03b/R-04 choose and review, R-05b registered (slip PDF, code), my requests (R-07, R-07b, R-09c/d/e) with cancel | 02 · D2 17:674 | Built |
+| `/registration/late` | R-06 late request with a document (C30 file row) | 02 · D2 R-06 | Built |
+| `/registration/change` | R-09 / R-09b course change with the live counter | 02 · D2 R-09 | Built |
+| `/verify?code=` | Public slip check | — | Built |
+| `/more` | Phone "More" tab: every menu item | — | Built |
+| `/staff/payments` | A-01 cards, live search, filters, Export; fee and masked account read-only | 03 · D2 20:479 | Adapted: no "Reported" card (no problem reports in the API) |
+| `/staff/payments/students/{id}` | A-02 one student's fee, attempts, refunds, reversal, receipts | 03 · D2 20:865 | Adapted: no manual confirmation (owner: only Paystack confirms) |
+| `/staff/registration` | A-07 report: cards, filters, live search, Export; tabs Students / Approvals / Rules / Carry-overs | 03 · D2 244:7343 | Built |
+| `/staff/registration/students/{id}` | A-07b one student's registration, slip, history, requests, carry-overs | 03 · D2 244:7463 | Built |
+| `/staff/registration/requests` | A-03 queue + A-03c detail, A-03b decline box (own box per kind), A-03e ODeL office queue | 03 · D2 184:5654 | Built |
+| `/staff/registration/rules` | A-05 / A-05b / A-05c | 03 · D2 21:751 | Built |
+| `/staff/registration/carry-overs` | Carry-overs per student, add, remove, CSV import | — | Adapted: find a student first (the API lists one student at a time) |
+| `/staff/students?student=` | W-22b + A-06 Move to another centre (dialog, told / not told, scheduled moves, cancel) | 03 · D2 21:979 | Built (B24: opened from the record) |
 | `/sign-in` | M-08 Sign in (matric or email + password, keep me signed in), E-04 wrong password, E-05 locked with the time, E-06 suspended, S-02 signed out | 02/01 · D1 flow B, C | Built |
 | `/activate`, `/activate?matric=…` | M-02 matric (or email) → M-03 6-digit code (resend wait, M-03b wrong code, E-03 can't access this email) → M-04 password with live rules → M-05 privacy notice → M-06 check your details; E-01 not found, E-02 already active, no email, too many codes | 02/01 · D1 flow A | Adapted: M-06 centre and email read-only (API allows only the phone) |
 | `/reset-password`, `?login=…&sent=1` | M-09 → M-03R code → M-11 new password ("Save and sign in") | 02/01 · D1 flow B | Adapted: M-10 "We'll email you a code" is folded into M-09 (the API sends the code on start, so the masked email is shown on the code screen) |
-| `/courses`, `/classes`, `/exams`, `/results`, `/payments`, … | Student menu destinations | — | Placeholder; inside the student shell when signed in ("… opens soon") |
+| `/courses`, `/classes`, `/exams`, `/results`, … | Student menu destinations | — | Placeholder; inside the student shell when signed in ("… opens soon") |
 | `/staff/sign-in` | W-01 Google sign-in | 03 · 2:355 | Built |
 | `/staff/sign-in?error=not_linked\|wrong_domain\|no_role` | W-02 Account not linked (+ variants) | 03 · 2:376 | Adapted: no "Email the ODeL office" button (no office email in the contract) |
 | `/staff/sign-in?error=suspended\|university_suspended\|cancelled\|expired\|too_many_attempts` | W-01 with a banner per error | 03 · 2:355 | Built (copy written for B0) |
@@ -57,10 +75,13 @@ Status: **Built** = matches the frame and talks to the contract; **Adapted** = b
 | `/` (no universities) | SA-01 empty state | — (designed in the same style) | Built |
 | `/universities/new` step 1 | SA-02 Details, SA-02c empty, SA-02b web address taken | 03 · 143:728, 357:30705, 143:1015 | Adapted: fields follow the contract (see below) |
 | `/universities/new` step 2 | SA-03 Branding + live preview, SA-03b contrast failure | 03 · 143:1306, 143:1592 | Built (motto field dropped: not in the contract) |
-| `/universities/new` step 3 | Rules and payments | SA-04 (skipped) | Adapted: kept in the stepper as "Defaults for now; the university’s admin sets these" |
+| `/universities/new` step 3 | SA-04 Rules and payments: fee, centre share, settlement account (bank → verify → confirm the name; saved right after the university is created) | SA-04 | Built |
 | `/universities/new` step 4 | SA-05 Review and create | 03 · 146:498 | Built |
 | `/universities/{id}?created=1` | SA-05b University created | 03 · 146:657 | Built |
 | `/universities/{id}` | SA-01b University page (details, branding, first admin, resend invitation) | 03 · 247:11785 | Adapted: no Edit / Change admin (no endpoints in B0) |
+| `/universities/{id}` Payments card | SA-01b fee and split, settlement account (masked), change fee, set or change account | — | Built |
+| `/settlement` | Settlement report: totals, per university, per payment (provider / centre / Paystack / student charge / net), Export | — | Built |
+| `/staff/sign-in` (console host) | Redirects to `/sign-in`; `next` is always a public path | — | Built |
 | `/audit` | SA-09 Audit trail (filter by university, pages, export CSV of the page) | 03 · 148:993 | Built |
 | `/health`, `/features`, `/support`, `/releases`, `/help`, `/settings` | "… is coming in a later phase" | — | Placeholder |
 

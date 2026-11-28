@@ -61,6 +61,8 @@ See `.env.example`.
 
 Codes: any 6 digits except `000000`; backup codes look like `4827-1930`.
 
+B2 in mock mode: the student **Tunde Ajayi** (`WU/ODL/24/0166`, password `Password1`) starts unpaid; card payments open a stand-in checkout (Pay, Decline, Close); a transfer or USSD "I have…" is confirmed about 15 seconds later. Wesley's seed also has a paid and registered student, a confirming transfer, a paid-twice refund and a reversal. Set the registration window for the demo with `http://wesley.localhost:3000/api/v1/dev/mock-b2?window=NOT_OPEN|OPEN|LATE|CLOSED|NOT_SET`. The coordinator is the "Admin with three roles" persona (Akure).
+
 ## Checks
 
 ```bash
