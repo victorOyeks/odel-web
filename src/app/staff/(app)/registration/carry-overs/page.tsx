@@ -21,7 +21,7 @@ export default async function CarryOversPage() {
     <>
       <PageHeader title="Carry-overs" subtitle="Courses a student must take again. They are pinned on the student's registration until results clear them." />
       <RegTabs active="carry" />
-      {res.ok ? <CarryOvers items={res.data.items} names={names} canEdit={role === "ODEL_ADMIN"} /> : <LoadFailed result={res} what="the carry-overs" />}
+      {res.ok || res.status === 400 ? <CarryOvers items={res.ok ? res.data.items : null} names={names} canEdit={role === "ODEL_ADMIN"} /> : <LoadFailed result={res} what="the carry-overs" />}
     </>
   );
 }

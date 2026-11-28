@@ -62,8 +62,8 @@ export default async function RegistrationReportPage({ searchParams }: PageProps
       <PageHeader title="Registrations" subtitle={r.subtitle} actions={<DownloadLink href={`/api/v1/registration/report.csv?${qs(f)}`}>Export</DownloadLink>} />
       <RegTabs active="students" pending={c.lateRequests + c.courseChanges} />
       <StatGrid>
-        <StatCard icon="how_to_reg" iconClass="text-success" label="Registered" value={c.registered.toLocaleString("en-NG")} sub={c.paid !== null ? `of ${c.paid.toLocaleString("en-NG")} who paid` : undefined} />
-        <StatCard icon="pending" iconClass="text-warning" label="Paid, not registered" value={c.paidNotRegistered !== null ? c.paidNotRegistered.toLocaleString("en-NG") : "—"} sub={c.paidNotRegistered === null ? "Fee status unavailable" : "Can register now"} />
+        <StatCard icon="how_to_reg" iconClass="text-success" label="Registered" value={c.registered.toLocaleString("en-NG")} sub={c.paid != null ? `of ${c.paid.toLocaleString("en-NG")} who paid` : undefined} />
+        <StatCard icon="pending" iconClass="text-warning" label="Paid, not registered" value={c.paidNotRegistered != null ? c.paidNotRegistered.toLocaleString("en-NG") : "—"} sub={c.paidNotRegistered === null ? "Fee status unavailable" : "Can register now"} />
         <StatCard icon="schedule" iconClass="text-info" label="Late requests" value={String(c.lateRequests)} sub={`${c.lateRequestsAtCentres} at centres · ${c.lateRequestsAtOffice} at the ODeL office`} />
         <StatCard icon="swap_horiz" label="Course changes" value={String(c.courseChanges)} sub="Waiting for a decision" />
       </StatGrid>
@@ -122,8 +122,8 @@ export default async function RegistrationReportPage({ searchParams }: PageProps
               { header: "Matric no.", cell: (x) => <span className="font-mono">{x.matricNumber}</span> },
               { header: "Programme · level", cell: (x) => `${x.programme?.name ?? "—"}${x.level ? ` · ${x.level}L` : ""}` },
               { header: "Centre", cell: (x) => x.centre?.name ?? "—" },
-              { header: "Courses", cell: (x) => (x.courseCount !== null ? String(x.courseCount) : "—"), numeric: true },
-              { header: "Units", cell: (x) => (x.units !== null ? String(x.units) : "—"), numeric: true },
+              { header: "Courses", cell: (x) => (x.courseCount != null ? String(x.courseCount) : "—"), numeric: true },
+              { header: "Units", cell: (x) => (x.units != null ? String(x.units) : "—"), numeric: true },
               { header: "Submitted", cell: (x) => formatShort(x.submittedAt), className: "whitespace-nowrap" },
               {
                 header: "Status",

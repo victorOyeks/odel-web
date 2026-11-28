@@ -31,16 +31,16 @@ export function useBanks() {
   return { banks, failed };
 }
 
-/** Account number: digits while typing, masked (••••4521) once you leave the box. */
+/** Account number: digits while typing, masked (••••4521) once you leave the box. The value itself never changes. */
 export function AccountNumberField({ value, onChange, error, disabled }: { value: string; onChange: (v: string) => void; error?: string; disabled?: boolean }) {
   const [focused, setFocused] = useState(false);
-  const shown = focused || value.length < 10 ? value : `••••••${value.slice(-4)}`;
+  const masked = !focused && value.length === 10;
   return (
     <TextField
       label="Account number"
       inputMode="numeric"
       autoComplete="off"
-      value={shown}
+      value={value}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 10))}
@@ -48,7 +48,15 @@ export function AccountNumberField({ value, onChange, error, disabled }: { value
       error={error}
       disabled={disabled}
       hint="NUBAN, 10 digits. We only ever show the last four after you leave this box."
-      inputClassName="font-mono"
+      className="[&>div]:relative"
+      inputClassName={masked ? "font-mono text-transparent caret-transparent" : "font-mono"}
+      trailing={
+        masked ? (
+          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center font-mono text-body-lg text-ink">
+            ••••••{value.slice(-4)}
+          </span>
+        ) : null
+      }
     />
   );
 }

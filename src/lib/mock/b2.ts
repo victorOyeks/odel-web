@@ -1055,7 +1055,10 @@ export async function b2Route(ctx: B1Ctx, opts: { demo: boolean; tenantId: strin
     if ((m = path.match(/^\/registration\/requests\/([^/]+)(\/attachment|\/approve|\/decline)?$/))) {
       const q = b.reqs.find((x) => x.id === m![1] && (!mine || mine.includes(x.centreCode)));
       if (!q) return notFound("that request");
-      if (method === "GET" && !m[2]) return json(200, reqView(u, b, q, true));
+      if (method === "GET" && !m[2]) {
+        const { registration, ...request } = reqView(u, b, q, true);
+        return json(200, { request, registration });
+      }
       if (method === "GET" && m[2] === "/attachment") return q.attachment ? json(200, { url: `/api/v1/dev/storage/${q.attachment.key}`, expiresAt: new Date(Date.now() + 300_000).toISOString() }) : notFound("an attachment");
       if (method === "POST") {
         if (role !== "ODEL_ADMIN" && role !== "CENTRE_COORDINATOR") return forbidden();

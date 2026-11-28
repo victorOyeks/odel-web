@@ -18,7 +18,7 @@ type Level = { level: number; minUnits: string; maxUnits: string; maxElectives: 
 export function RulesForm({ rules, programmes, canEdit }: { rules: RegRules; programmes: { id: string; name: string }[]; canEdit: boolean }) {
   const router = useRouter();
   const act = useAction();
-  const [levels, setLevels] = useState<Level[]>(rules.levels.map((l) => ({ level: l.level, minUnits: String(l.minUnits), maxUnits: String(l.maxUnits), maxElectives: String(l.maxElectives), compulsoryUnits: l.compulsoryUnits })));
+  const [levels, setLevels] = useState<Level[]>(rules.levels.map((l) => ({ level: l.level, minUnits: String(l.minUnits), maxUnits: String(l.maxUnits), maxElectives: String(l.maxElectives), compulsoryUnits: l.compulsoryUnits ?? 0 })));
   const [changes, setChanges] = useState(rules.window?.changesCloseOn ?? "");
   const [fee, setFee] = useState(rules.fee);
   const [saved, setSaved] = useState<string | null>(null);
@@ -153,7 +153,7 @@ export function RulesForm({ rules, programmes, canEdit }: { rules: RegRules; pro
                 <TextField label={<span className="md:sr-only">Minimum</span>} inputMode="numeric" value={l.minUnits} onChange={set(i, "minUnits")} disabled={!canEdit} error={fe[`levels[${i}].minUnits`] ?? (problem?.startsWith("The minimum") ? " " : undefined)} aria-label={`${l.level}L minimum units`} />
                 <TextField label={<span className="md:sr-only">Maximum</span>} inputMode="numeric" value={l.maxUnits} onChange={set(i, "maxUnits")} disabled={!canEdit} error={fe[`levels[${i}].maxUnits`] ?? (problem ? " " : undefined)} aria-label={`${l.level}L maximum units`} />
                 <TextField label={<span className="md:sr-only">Electives</span>} inputMode="numeric" value={l.maxElectives} onChange={set(i, "maxElectives")} disabled={!canEdit} error={fe[`levels[${i}].maxElectives`]} aria-label={`${l.level}L electives up to`} />
-                <p className={`col-span-3 text-body md:col-span-1 md:pt-3 ${problem ? "text-danger" : "text-ink-2"}`}>{problem ?? `${l.compulsoryUnits} units · fits`}</p>
+                <p className={`col-span-3 text-body md:col-span-1 md:pt-3 ${problem ? "text-danger" : "text-ink-2"}`}>{problem ?? (l.compulsoryUnits ? `${l.compulsoryUnits} units · fits` : "None at this level")}</p>
               </div>
             );
           })}

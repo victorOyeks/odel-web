@@ -18,6 +18,9 @@ import { Panel } from "@/components/ui/panel";
 import { SkeletonLine } from "@/components/ui/skeleton";
 import { AttachmentLink } from "@/components/registration/student";
 
+/** GET /registration/requests/{id} answers {"request", "registration"} (the contract shows them merged): accept both. */
+const detailOf = (d: RegRequest | { request: RegRequest; registration: RegRequest["registration"] }): RegRequest => ("request" in d && d.request ? { ...d.request, registration: d.registration } : (d as RegRequest));
+
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
 /** A-03 queue with A-03c detail: list on the left, the chosen request on the right (stacked on phones). */
@@ -90,9 +93,9 @@ function Detail({ id, canDecide, onBack, onDecided }: { id: string; canDecide: b
 
   useEffect(() => {
     let alive = true;
-    api<RegRequest>("GET", `/registration/requests/${id}`).then((x) => {
+    api<RegRequest | { request: RegRequest; registration: RegRequest["registration"] }>("GET", `/registration/requests/${id}`).then((x) => {
       if (!alive) return;
-      if (x.ok) setR(x.data);
+      if (x.ok) setR(detailOf(x.data));
       else setFailed(x.error.message ?? "We could not load this request.");
     });
     return () => {
@@ -107,8 +110,8 @@ function Detail({ id, canDecide, onBack, onDecided }: { id: string; canDecide: b
       setDeclining(false);
       onDecided(`${what === "approve" ? "Approved" : "Declined"} ${r.student.fullName}'s ${r.kind === "LATE" ? "late registration" : "course change"}. ${r.student.fullName.split(" ")[0]} gets an email${what === "approve" && r.kind === "CHANGE" ? " and a new slip" : ""}.`);
     } else if (res.error.error === "not_pending") {
-      const fresh = await api<RegRequest>("GET", `/registration/requests/${r.id}`);
-      if (fresh.ok) setR(fresh.data);
+      const fresh = await api<RegRequest | { request: RegRequest; registration: RegRequest["registration"] }>("GET", `/registration/requests/${r.id}`);
+      if (fresh.ok) setR(detailOf(fresh.data));
     }
   }
 

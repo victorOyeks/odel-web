@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { formatShort } from "@/lib/format";
@@ -20,9 +20,32 @@ import { DownloadLink } from "./bits";
 type Row = CarryOver & { studentName?: string; matricNumber?: string };
 
 /** Carry-overs (until results produce them): list with live search, add one, remove, CSV import with a row report. */
-export function CarryOvers({ items, names, canEdit }: { items: Row[]; names: Record<string, { fullName: string; matricNumber: string }>; canEdit: boolean }) {
+export function CarryOvers({ items: all, names, canEdit }: { items: Row[] | null; names: Record<string, { fullName: string; matricNumber: string }>; canEdit: boolean }) {
   const router = useRouter();
   const [q, setQ] = useState("");
+  // The API lists carry-overs one student at a time: without a university-wide list, find the student first.
+  const perStudent = all === null;
+  const [found, setFound] = useState<StudentRow[]>([]);
+  const [picked, setPicked] = useState<StudentRow | null>(null);
+  const [own, setOwn] = useState<Row[]>([]);
+  const items = perStudent ? own : all;
+  const seq = useRef(0);
+  useEffect(() => {
+    if (!perStudent || picked) return;
+    const n = ++seq.current;
+    const term = q.trim();
+    if (term.length < 2) return;
+    const t = window.setTimeout(async () => {
+      const r = await api<Paged<StudentRow>>("GET", `/students?q=${encodeURIComponent(term)}&size=8`);
+      if (n === seq.current && r.ok) setFound(r.data.items);
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [q, perStudent, picked]);
+  const loadOwn = async (st: StudentRow) => {
+    const r = await api<{ items: Row[] }>("GET", `/registration/carry-overs?studentId=${st.id}`);
+    setOwn(r.ok ? r.data.items.map((x) => ({ ...x, studentName: st.fullName, matricNumber: st.matricNumber })) : []);
+  };
+  const refresh = () => (perStudent && picked ? loadOwn(picked) : router.refresh());
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<Row | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -33,7 +56,7 @@ export function CarryOvers({ items, names, canEdit }: { items: Row[]; names: Rec
   const act = useAction();
   const who = (r: Row) => ({ name: r.studentName || names[r.studentId]?.fullName || "Student", matric: r.matricNumber || names[r.studentId]?.matricNumber || "" });
   const needle = q.trim().toLowerCase();
-  const shown = items.filter((r) => {
+  const shown = perStudent ? items : items.filter((r) => {
     if (needle.length < 2) return true;
     const w = who(r);
     return [w.name, w.matric, r.code, r.title].some((x) => x.toLowerCase().includes(needle));
@@ -52,7 +75,7 @@ export function CarryOvers({ items, names, canEdit }: { items: Row[]; names: Rec
     setImporting(false);
     if (!r.ok) return setImportError(r.error.message ?? "We could not read the file. Check it matches the template and try again.");
     setReport(r.data);
-    router.refresh();
+    refresh();
   }
 
   async function remove() {
@@ -61,7 +84,7 @@ export function CarryOvers({ items, names, canEdit }: { items: Row[]; names: Rec
     if (r.ok) {
       setNotice(`Removed ${removing.code} from ${who(removing).name}'s carry-overs.`);
       setRemoving(null);
-      router.refresh();
+      refresh();
     }
   }
 
@@ -92,8 +115,11 @@ export function CarryOvers({ items, names, canEdit }: { items: Row[]; names: Rec
           <input
             type="search"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Name, matric no. or course"
+            onChange={(e) => {
+              setQ(e.target.value);
+              if (perStudent) setPicked(null);
+            }}
+            placeholder={perStudent ? "Find a student: name or matric no." : "Name, matric no. or course"}
             autoComplete="off"
             className="h-12 w-full rounded-full border border-transparent bg-subtle pr-4 pl-10 text-body-lg text-ink outline-none placeholder:text-ink-3 focus:border-focus md:h-10 md:text-body"
           />
@@ -127,9 +153,34 @@ export function CarryOvers({ items, names, canEdit }: { items: Row[]; names: Rec
           }}
         />
       </div>
-      {!shown.length ? (
+      {perStudent && !picked ? (
+        found.length && q.trim().length >= 2 ? (
+          <ul aria-label="Students" className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface">
+            {found.map((st) => (
+              <li key={st.id}>
+                <button
+                  type="button"
+                  className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left hover:bg-subtle"
+                  onClick={() => {
+                    setPicked(st);
+                    setQ(`${st.fullName} · ${st.matricNumber}`);
+                    loadOwn(st);
+                  }}
+                >
+                  <span className="min-w-0 flex-1 text-label text-ink">{st.fullName}</span>
+                  <span className="font-mono text-body-sm text-ink-2">{st.matricNumber}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-lg border border-line bg-surface p-6 text-center text-body text-ink-2">
+            {q.trim().length >= 2 ? "No student matches. Check the spelling or the matric number." : "Find a student to see, add or remove their carry-overs. To add many at once, import the list from the results office as a CSV (matric_number, course_code, from_session)."}
+          </div>
+        )
+      ) : !shown.length ? (
         <div className="rounded-lg border border-line bg-surface p-6 text-center text-body text-ink-2">
-          {items.length ? "No carry-overs match. Check the spelling or the matric number." : "No carry-overs yet. Add one, or import the list from the results office as a CSV (matric_number, course_code, from_session)."}
+          {perStudent ? `${picked?.fullName} has no carry-overs.` : items.length ? "No carry-overs match. Check the spelling or the matric number." : "No carry-overs yet. Add one, or import the list from the results office as a CSV (matric_number, course_code, from_session)."}
         </div>
       ) : (
         <DataTable
@@ -157,11 +208,12 @@ export function CarryOvers({ items, names, canEdit }: { items: Row[]; names: Rec
       )}
       {adding ? (
         <AddCarryOver
+          matric={picked?.matricNumber ?? ""}
           onClose={() => setAdding(false)}
           onAdded={(msg) => {
             setAdding(false);
             setNotice(msg);
-            router.refresh();
+            refresh();
           }}
         />
       ) : null}
@@ -188,9 +240,9 @@ export function CarryOvers({ items, names, canEdit }: { items: Row[]; names: Rec
   );
 }
 
-function AddCarryOver({ onClose, onAdded }: { onClose: () => void; onAdded: (msg: string) => void }) {
+function AddCarryOver({ matric: initialMatric, onClose, onAdded }: { matric: string; onClose: () => void; onAdded: (msg: string) => void }) {
   const act = useAction();
-  const [matric, setMatric] = useState("");
+  const [matric, setMatric] = useState(initialMatric);
   const [code, setCode] = useState("");
   const [from, setFrom] = useState("2025/2026");
   async function save() {
