@@ -26,7 +26,11 @@ export function formatDay(iso: string): string {
 export const count = (n: number | null | undefined) => (n ? n.toLocaleString("en-NG") : "—");
 
 /** "₦15,000" */
-export const naira = (n: number | null | undefined) => `₦${(n ?? 0).toLocaleString("en-NG")}`;
+export const naira = (n: number | null | undefined) => {
+  const v = n ?? 0;
+  // Whole naira as "₦15,000"; kobo always with two decimals ("₦659.90", never "₦659.9").
+  return `₦${v.toLocaleString("en-NG", Number.isInteger(v) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 /** A calendar date (YYYY-MM-DD) as "Tue 16 Feb 2027"; with year=false "Tue 16 Feb". */
 export function formatDate(d: string | null | undefined, year = true): string {

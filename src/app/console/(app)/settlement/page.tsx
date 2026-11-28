@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { apiGet } from "@/lib/api/server";
 import { expectSession } from "@/lib/guard";
-import { formatShort, naira } from "@/lib/format";
+import { formatDate, formatShort, naira } from "@/lib/format";
 import type { SettlementReport, UniversityPayments } from "@/lib/types-b2";
 import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -43,7 +43,7 @@ export default async function SettlementPage({ searchParams }: PageProps<"/conso
     <>
       <PageHeader
         title="Settlement"
-        subtitle={`Platform fee payments from ${r.from} to ${r.to}. Each centre gets its full share; where the student paid Paystack's charge, provider net counts it.`}
+        subtitle={`Platform fee payments from ${formatDate(r.from)} to ${formatDate(r.to)}. Each centre gets its full share; where the student paid Paystack's charge, provider net counts it.`}
         actions={
           <ExportRows
             fileName={`settlement-${r.from}-${r.to}.csv`}
